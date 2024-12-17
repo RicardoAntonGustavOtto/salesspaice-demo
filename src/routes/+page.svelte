@@ -29,10 +29,14 @@
   }
 </script>
 
-<h1>User Dashboard</h1>
-{#if user}
-  <p>Welcome, {user.email}!</p>
-  <Button onclick={() => logout()}>Logout</Button>
-{:else}
-  <p>Please log in to view your dashboard.</p>
-{/if}
+<div class="flex flex-col items-center justify-center min-h-screen">
+  {#if user}
+    <p>Welcome, {user.email}!</p>
+    <div class="flex gap-4">
+      <Button onclick={() => goto("/private/events")}>Go to SalesSpace</Button>
+      <Button onclick={() => logout()}>Logout</Button>
+    </div>
+  {:else}
+    <Button onclick={() => goto("/login")}>Please Login</Button>
+  {/if}
+</div>
