@@ -1,65 +1,69 @@
-<!-- @format -->
 <script lang="ts">
-  import * as Sidebar from "$lib/components/ui/sidebar/index.js";
-  import AppSidebar from "$lib/components/AppSidebar.svelte";
-  import * as Breadcrumb from "$lib/components/ui/breadcrumb/index.js";
-  import { Separator } from "$lib/components/ui/separator/index.js";
 
-  import { page } from "$app/stores";
-  import { breadcrumbs } from "$lib/stores/breadcrumbs";
-  import { derived } from "svelte/store";
+	import "../../app.css";
+	import { page } from "$app/stores";
+	import AppSidebar from "$lib/components/app-sidebar.svelte";
+	import NavActions from "$lib/components/nav-actions.svelte";
+	import * as Breadcrumb from "$lib/components/ui/breadcrumb/index.js";
+	import { Separator } from "$lib/components/ui/separator/index.js";
+	import * as Sidebar from "$lib/components/ui/sidebar/index.js";
+    import BreadcrumbSeparator from "$lib/components/ui/breadcrumb/breadcrumb-separator.svelte";
 
-  let { data, children } = $props();
-  let { supabase } = $derived(data);
+	const pathSegments = $derived(
+		$page.url.pathname.split("/").filter(Boolean),
+	);
+
+	let { data, children } = $props()
+  let { supabase } = $derived(data)
 
   const logout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      console.error(error);
+    const { error } = await supabase.auth.signOut()
+    if (error) {	
+      console.error(error)
     }
-  };
-
-  // Derive the current breadcrumb path
-  const currentBreadcrumbs = derived(
-    [page, breadcrumbs],
-    ([$page, $breadcrumbs]) => {
-      const path = $page.url.pathname;
-      const breadcrumbPath = [];
-
-      $breadcrumbs.forEach((breadcrumb) => {
-        if (path.startsWith(breadcrumb.path)) {
-          breadcrumbPath.push(breadcrumb);
-        }
-      });
-
-      return breadcrumbPath;
-    }
-  );
+  }
 </script>
 
 <Sidebar.Provider>
-  <AppSidebar />
-  <Sidebar.Inset>
-    <header class="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-      <Sidebar.Trigger class="-ml-1" />
-      <Separator orientation="vertical" class="mr-2 h-4" />
-      <Breadcrumb.Root>
-        <Breadcrumb.List>
-          {#each $currentBreadcrumbs as breadcrumb, i}
-            <Breadcrumb.Item class="hidden md:block">
-              <Breadcrumb.Link href={breadcrumb.path}
-                >{breadcrumb.name}</Breadcrumb.Link
-              >
-            </Breadcrumb.Item>
-            {#if i !== $currentBreadcrumbs.length - 1}
-              <Breadcrumb.Separator class="hidden md:block" />
-            {/if}
-          {/each}
-        </Breadcrumb.List>
-      </Breadcrumb.Root>
-    </header>
-    <main class="bg-slate-50">
-      {@render children?.()}
-    </main>
-  </Sidebar.Inset>
+	<AppSidebar />
+	<Sidebar.Inset>
+		<header class="flex h-14 shrink-0 items-center gap-2">
+			<div class="flex flex-1 items-center gap-2 px-3">
+				<Sidebar.Trigger />
+				<Separator orientation="vertical" class="mr-2 h-4" />
+				<Breadcrumb.Root>
+					<Breadcrumb.List>
+							<Breadcrumb.Item>
+								<Breadcrumb.Link href="/">Home </Breadcrumb.Link>
+							</Breadcrumb.Item>
+							<BreadcrumbSeparator />
+							{#each pathSegments as segment, i}
+								<Breadcrumb.Item>
+									{#if i === pathSegments.length - 1}
+									<Breadcrumb.Page
+										class="line-clamp-1 capitalize"
+									>
+										{segment.replace(/-/g, " ")}
+									</Breadcrumb.Page>
+								{:else}
+                {#if segment !== "private"}
+									<Breadcrumb.Link
+										href={`/${pathSegments.slice(0, i + 1).join("/")}`}
+										class="capitalize"
+									>
+										{segment.replace(/-/g, " ")}
+									</Breadcrumb.Link>
+                  <BreadcrumbSeparator />
+                  {/if}
+								{/if}
+							</Breadcrumb.Item>
+						{/each}
+					</Breadcrumb.List>
+				</Breadcrumb.Root>
+			</div>
+		</header>
+		<div class="flex flex-1 flex-col gap-4 px-4 py-10">
+			{@render children()}
+		</div>
+	</Sidebar.Inset>
 </Sidebar.Provider>

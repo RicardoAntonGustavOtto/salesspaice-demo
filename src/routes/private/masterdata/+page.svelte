@@ -335,7 +335,7 @@
         </div>
         <div>
           <label class="block text-sm font-medium mb-2" for="companyVision"
-            >Company Vision/Story</label
+            >Information about your company</label
           >
           <textarea
             id="companyVision"
