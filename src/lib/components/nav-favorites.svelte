@@ -22,7 +22,7 @@
 </script>
 
 <Sidebar.Group class="group-data-[collapsible=icon]:hidden">
-	<Sidebar.GroupLabel>Favorites</Sidebar.GroupLabel>
+	<Sidebar.GroupLabel>⭐ Favorites</Sidebar.GroupLabel>
 	<Sidebar.Menu>
 		{#each favorites as item (item.name)}
 			<Sidebar.MenuItem>
@@ -70,11 +70,6 @@
 				</DropdownMenu.Root>
 			</Sidebar.MenuItem>
 		{/each}
-		<Sidebar.MenuItem>
-			<Sidebar.MenuButton class="text-sidebar-foreground/70">
-				<Ellipsis />
-				<span>More</span>
-			</Sidebar.MenuButton>
-		</Sidebar.MenuItem>
+		
 	</Sidebar.Menu>
 </Sidebar.Group>

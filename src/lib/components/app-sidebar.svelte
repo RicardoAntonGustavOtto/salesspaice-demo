@@ -39,23 +39,14 @@
 				icon: Building2,
 				isActive: false,
 			},
+			{
+				title: "Prospecting",
+				url: "/private/targetcompanyresearch",
+				icon: Building2,
+				isActive: false,
+			},
 		],
 		navSecondary: [
-			{
-				title: "Settings",
-				url: "#",
-				icon: Settings2,
-			},
-			{
-				title: "Research Documents",
-				url: "#",
-				icon: Blocks,
-			},
-			{
-				title: "Help",
-				url: "#",
-				icon: MessageCircleQuestion,
-			},
 			{
 				title: "Logout",
 				url: "#",
@@ -63,34 +54,10 @@
 			},
 		],
 		favorites: [
-			{
-				name: "devii",
-				url: "#",
-				emoji: "📊",
-			},
+			
 		],
 		targetCompanies: [
-			{
-				name: "devii",
-				emoji: "🏠",
-				pages: [
-					{
-						name: "Research Documents",
-						url: "#",
-						emoji: "📔",
-					},
-					{
-						name: "Prospects",
-						url: "#",
-						emoji: "🍏",
-					},
-					{
-						name: "Opportunities",
-						url: "#",
-						emoji: "🌟",
-					},
-				],
-			},
+			
 		],
 	};
 </script>

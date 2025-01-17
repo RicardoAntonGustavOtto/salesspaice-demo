@@ -67,12 +67,7 @@
 					</Sidebar.MenuItem>
 				</Collapsible.Root>
 			{/each}
-			<Sidebar.MenuItem>
-				<Sidebar.MenuButton class="text-sidebar-foreground/70">
-					<Ellipsis />
-					<span>More</span>
-				</Sidebar.MenuButton>
-			</Sidebar.MenuItem>
+			
 		</Sidebar.Menu>
 	</Sidebar.GroupContent>
 </Sidebar.Group>
