@@ -5,6 +5,7 @@
 	import Calendar from "lucide-svelte/icons/calendar";
 	import Command from "lucide-svelte/icons/command";
 	import House from "lucide-svelte/icons/house";
+	import Code from "lucide-svelte/icons/code";
 	import Inbox from "lucide-svelte/icons/inbox";
 	import MessageCircleQuestion from "lucide-svelte/icons/message-circle-question";
 	import Search from "lucide-svelte/icons/search";
@@ -42,6 +43,11 @@
 	];
 
 	const navSecondary = [
+		{
+			title: "Promptmanager",
+			url: "/private/promptmanager",
+			icon: Code,
+		},
 		{
 			title: "Logout",
 			url: "#",
