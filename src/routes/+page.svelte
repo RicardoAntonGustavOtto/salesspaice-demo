@@ -33,7 +33,7 @@
   {#if user}
     <p>Welcome, {user.email}!</p>
     <div class="flex gap-4">
-      <Button onclick={() => goto("/private/events")}>Go to SalesSpace</Button>
+      <Button onclick={() => goto("/private/events")}>Go to SalesSpaice</Button>
       <Button onclick={() => logout()}>Logout</Button>
     </div>
   {:else}
