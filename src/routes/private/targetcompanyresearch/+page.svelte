@@ -101,25 +101,25 @@
   }
 </script>
 
-<div class="container mx-auto px-4 py-8">
+<div class="container mx-auto py-6 px-6 space-y-6">
   {#if companies.length === 0 && !isLoading}
     <div class="flex flex-col items-center justify-center min-h-[60vh]">
       <button
         on:click={() => (showAddModal = true)}
-        class="border-2 border-dashed border-gray-200 rounded-lg p-12 hover:border-gray-300 hover:bg-gray-50 transition-all duration-200"
+        class="border-2 border-dashed border-muted rounded-lg p-12 hover:border-muted/80 hover:bg-muted/5 transition-colors"
       >
         <span class="text-xl">+</span>
-        <p class="mt-2 text-gray-600">
+        <p class="mt-2 text-muted-foreground">
           No companies added yet. Click to add your first target company.
         </p>
       </button>
     </div>
   {:else}
-    <div class="mb-6 flex justify-between items-center">
-      <h1 class="text-2xl font-semibold">Target Companies</h1>
+    <div class="flex justify-between items-center">
+      <h1 class="text-3xl font-bold tracking-tight">Target Companies</h1>
       <button
         on:click={() => (showAddModal = true)}
-        class="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-all duration-200"
+        class="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
       >
         Add Company
       </button>
@@ -127,35 +127,29 @@
 
     {#if isLoading}
       <div class="flex justify-center items-center h-64">
-        <div
-          class="animate-spin rounded-full h-8 w-8 border-2 border-gray-200 border-b-black"
-        />
+        <div class="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-foreground" />
       </div>
     {:else if error}
-      <div class="bg-red-50 border border-red-100 text-red-600 p-4 rounded-lg">
+      <div class="bg-destructive/10 border border-destructive/20 text-destructive p-4 rounded-lg">
         {error}
       </div>
     {:else}
-      <div
-        class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
-      >
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {#each companies as company}
-          <div
-            class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-all duration-200"
-          >
+          <div class="bg-card rounded-lg shadow-sm border border-border p-4 hover:shadow-md transition-all">
             <h3 class="font-semibold text-lg mb-2">{company.name}</h3>
             <a
               href={company.website}
               target="_blank"
               rel="noopener noreferrer"
-              class="text-gray-600 hover:text-gray-900 transition-colors duration-200 text-sm break-all"
+              class="text-muted-foreground hover:text-foreground transition-colors text-sm break-all"
             >
               {company.website}
             </a>
             <div class="mt-4">
               <button
                 on:click={() => goToCompany(company)}
-                class="w-full px-3 py-2 text-sm border border-gray-200 bg-white text-gray-900 rounded-lg hover:bg-gray-50 transition-all duration-200"
+                class="w-full px-3 py-2 text-sm border border-input bg-background text-foreground rounded-lg hover:bg-accent transition-colors"
               >
                 View Details
               </button>
@@ -170,55 +164,45 @@
 <!-- Add Company Modal -->
 {#if showAddModal}
   <div
-    class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center"
+    class="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center"
     transition:fade
     on:click|self={closeModal}
   >
     <div
-      class="bg-white p-6 rounded-lg w-full max-w-md mx-4 shadow-lg"
+      class="bg-card p-6 rounded-lg w-full max-w-md mx-4 shadow-lg"
       on:click|stopPropagation
     >
-      <h2 class="text-xl font-semibold mb-4">Add New Target Company</h2>
+      <h2 class="text-xl font-semibold tracking-tight mb-4">Add New Target Company</h2>
       <div class="space-y-4">
         <div>
-          <label
-            class="block text-sm font-medium mb-1 text-gray-700"
-            for="companyName">Company Name</label
-          >
+          <label class="block text-sm font-medium mb-1" for="companyName">Company Name</label>
           <input
             type="text"
             id="companyName"
             bind:value={newCompany.name}
-            class="w-full px-3 py-2 rounded-lg bg-gray-50 border border-gray-200 text-gray-900 focus:outline-none focus:border-black focus:ring-1 focus:ring-black transition-all duration-200"
+            class="w-full px-3 py-2 rounded-lg bg-background border border-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
         <div>
-          <label
-            class="block text-sm font-medium mb-1 text-gray-700"
-            for="companyWebsite">Company Website</label
-          >
+          <label class="block text-sm font-medium mb-1" for="companyWebsite">Company Website</label>
           <input
             type="text"
             id="companyWebsite"
             bind:value={newCompany.website}
-            class="w-full px-3 py-2 rounded-lg bg-gray-50 border border-gray-200 text-gray-900 focus:outline-none focus:border-black focus:ring-1 focus:ring-black transition-all duration-200"
+            class="w-full px-3 py-2 rounded-lg bg-background border border-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
         <div class="flex gap-3 mt-6">
           <button
             on:click={addCompany}
             disabled={isLoading}
-            class="flex-1 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            class="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
-            {#if isLoading}
-              <span class="inline-block animate-spin">↻</span>
-            {:else}
-              Add Company
-            {/if}
+            {isLoading ? '↻' : 'Add Company'}
           </button>
           <button
             on:click={closeModal}
-            class="flex-1 px-4 py-2 border border-gray-200 bg-white text-gray-900 rounded-lg hover:bg-gray-50 transition-all duration-200"
+            class="flex-1 px-4 py-2 border border-input bg-background text-foreground rounded-lg hover:bg-accent transition-colors"
           >
             Cancel
           </button>

@@ -14,6 +14,7 @@
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			icon: any;
 			badge?: string;
+			onClick?: () => void;
 		}[];
 	} = $props();
 </script>
@@ -25,17 +26,19 @@
 				<Sidebar.MenuItem>
 					<Sidebar.MenuButton>
 						{#snippet child({ props })}
-							{#if item.title == "logout"}
-								<a href={item.url} {...props} onclick={logout}>
-									<item.icon />
-									<span>{item.title}</span>
-								</a>
-							{:else}
-								<a href={item.url} {...props}>
-									<item.icon />
-									<span>{item.title}</span>
-								</a>
-							{/if}
+							<a 
+								href={item.url} 
+								{...props} 
+								onclick={(e) => {
+									if (item.onClick) {
+										e.preventDefault();
+										item.onClick();
+									}
+								}}
+							>
+								<item.icon />
+								<span>{item.title}</span>
+							</a>
 						{/snippet}
 					</Sidebar.MenuButton>
 					{#if item.badge}

@@ -66,12 +66,21 @@
 	import type { ComponentProps } from "svelte";
 	import { ownCompany } from "$lib/stores/ownCompany";
 	import { page } from "$app/stores";
+	import { goto } from "$app/navigation";
 
 	let { ref = $bindable(null), ...restProps }: ComponentProps<typeof Sidebar.Root> = $props();
 
 	// Get user email from supabase session
 	let userEmail = $derived($page.data?.session?.user?.email || '');
 	let userName = $derived(userEmail.split('@')[0]);
+
+	// Add logout handler
+	async function handleLogout() {
+		const { error } = await $page.data.supabase.auth.signOut();
+		if (!error) {
+			goto('/');
+		}
+	}
 
 	// Reactive data object
 	let data = $derived({
@@ -83,7 +92,19 @@
 			},
 		],
 		navMain,
-		navSecondary,
+		navSecondary: [
+			{
+				title: "Promptmanager",
+				url: "/private/promptmanager",
+				icon: Code,
+			},
+			{
+				title: "Logout",
+				url: "#",
+				icon: LogOut,
+				onClick: handleLogout
+			},
+		],
 		favorites: [],
 		targetCompanies: [],
 	});

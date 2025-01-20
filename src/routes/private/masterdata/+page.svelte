@@ -296,121 +296,118 @@
   }
 </script>
 
-{#if error}
-  <div class="mb-4 p-4 bg-red-50 border border-red-100 rounded-lg text-red-600">
-    {error}
+<div class="container mx-auto py-6 px-6 space-y-6">
+  <div class="flex justify-between items-center">
+    <h1 class="text-3xl font-bold tracking-tight">Master Data</h1>
   </div>
-{/if}
 
-{#if isLoading}
-  <div class="flex items-center justify-center h-64">
-    <div
-      class="animate-spin rounded-full h-8 w-8 border-2 border-gray-200 border-b-black"
-    ></div>
-  </div>
-{:else}
-  <h1 class="text-2xl font-bold mb-4">Masterdata</h1>
-
-  <div class="space-y-6">
-    <!-- Company Details -->
-    <div class="rounded-lg border bg-white p-6 shadow-sm">
+  {#if isLoading}
+    <div class="flex justify-center items-center h-64">
+      <div class="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-foreground" />
+    </div>
+  {:else if error}
+    <div class="bg-destructive/10 border border-destructive/20 text-destructive p-4 rounded-lg">
+      {error}
+    </div>
+  {:else}
+    <div class="grid gap-6">
+      <!-- Company Information -->
       <div class="space-y-4">
-        {#if saveError}
-          <div
-            class="mb-4 p-3 bg-red-50 border border-red-100 rounded-lg text-sm text-red-600"
-          >
-            {saveError}
+        <div class="grid gap-4">
+          <div>
+            <label for="companyName" class="block text-sm font-medium mb-1">Company Name</label>
+            <input
+              type="text"
+              id="companyName"
+              bind:value={companyData.name}
+              class="w-full px-3 py-2 rounded-lg bg-background border border-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            />
           </div>
-        {/if}
-        <div>
-          <label class="block text-sm font-medium mb-2" for="companyName"
-            >Company Name</label
-          >
-          <input
-            type="text"
-            id="companyName"
-            bind:value={companyData.name}
-            class="w-full px-4 py-2 rounded-lg bg-gray-50 border border-gray-200 text-gray-900 focus:outline-none focus:border-black focus:ring-1 focus:ring-black transition-all duration-200"
-          />
-        </div>
-        <div>
-          <label class="block text-sm font-medium mb-2" for="companyVision"
-            >Information about your company</label
-          >
-          <textarea
-            id="companyVision"
-            bind:value={companyData.description}
-            rows="4"
-            class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:border-gray-400"
-          ></textarea>
-        </div>
-        <div class="flex justify-end">
-          <button
-            on:click={saveCompanyData}
-            class="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-all duration-200 flex items-center gap-2"
-            disabled={isSaving}
-          >
-            {#if isSaving}
-              <span class="inline-block animate-spin">↻</span>
-              Saving...
-            {:else}
-              Save Changes
-            {/if}
-          </button>
+          <div>
+            <label for="companyDescription" class="block text-sm font-medium mb-1">Information</label>
+            <textarea
+              id="companyDescription"
+              bind:value={companyData.description}
+              rows="4"
+              class="w-full px-3 py-2 rounded-lg bg-background border border-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            ></textarea>
+          </div>
+          <div class="flex justify-end">
+            <button
+              on:click={saveCompanyData}
+              disabled={isSaving}
+              class="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+            >
+              {isSaving ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- Products List -->
-    <div class="rounded-lg border bg-white p-6 shadow-sm relative">
-      {#if isLoading}
-        <div
-          class="absolute inset-0 bg-white/80 flex items-center justify-center"
-        >
-          <div
-            class="animate-spin rounded-full h-8 w-8 border-2 border-gray-200 border-b-black"
-          ></div>
-        </div>
-      {/if}
-      <h2 class="text-xl font-semibold mb-4">Products</h2>
+      <!-- Products Section -->
       <div class="space-y-4">
-        {#each companyData.products as product (product.id)}
-          <div class="rounded-lg border p-4">
-            <h3 class="font-semibold">{product.name}</h3>
-            <p class="text-gray-600 mt-1">{product.description}</p>
-            {#if product.tags?.length > 0}
-              <div class="flex flex-wrap gap-2 mt-2">
-                {#each product.tags as tag}
-                  <span class="px-2 py-1 bg-gray-100 rounded-full text-sm">
-                    {tag}
-                  </span>
-                {/each}
+        <h2 class="text-xl font-semibold tracking-tight">Products</h2>
+        {#if companyData.products?.length === 0}
+          <div class="flex flex-col items-center justify-center min-h-[20vh]">
+            <button
+              on:click={openModal}
+              class="border-2 border-dashed border-muted rounded-lg p-12 hover:border-muted/80 hover:bg-muted/5 transition-colors"
+            >
+              <span class="text-xl">+</span>
+              <p class="mt-2 text-muted-foreground">
+                No products added yet. Click to add your first product.
+              </p>
+            </button>
+          </div>
+        {:else}
+          <div class="rounded-lg border bg-card p-6 shadow-sm relative">
+            {#if isLoading}
+              <div class="absolute inset-0 bg-background/80 flex items-center justify-center">
+                <div class="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-foreground"></div>
               </div>
             {/if}
-            <div class="flex justify-between items-center mt-2">
-              <span class="text-xs text-gray-500">
-                Added: {new Date(product.created_at).toLocaleDateString()}
-              </span>
-              <button
-                on:click={() => openDeleteModal(product)}
-                class="text-gray-600 hover:text-gray-900 transition-all duration-200"
-              >
-                Delete
-              </button>
+            <div class="space-y-4">
+              {#each companyData.products as product (product.id)}
+                <div class="rounded-lg border border-input p-4">
+                  <h3 class="font-semibold">{product.name}</h3>
+                  <p class="text-muted-foreground mt-1">{product.description}</p>
+                  {#if product.tags?.length > 0}
+                    <div class="flex flex-wrap gap-2 mt-2">
+                      {#each product.tags as tag}
+                        <span class="px-2 py-1 bg-muted rounded-full text-sm">
+                          {tag}
+                        </span>
+                      {/each}
+                    </div>
+                  {/if}
+                  <div class="flex justify-between items-center mt-2">
+                    <span class="text-xs text-muted-foreground">
+                      Added: {new Date(product.created_at).toLocaleDateString()}
+                    </span>
+                    <button
+                      on:click={() => openDeleteModal(product)}
+                      class="text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              {/each}
             </div>
           </div>
-        {/each}
-        <button
-          on:click={openModal}
-          class="w-full p-4 rounded-lg border border-dashed border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all duration-200 flex items-center justify-center gap-2"
-        >
-          <span class="text-xl">+</span>
-          <span>Add Product</span>
-        </button>
+          <div class="flex justify-end">
+            <button
+              on:click={openModal}
+              class="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              Add Product
+            </button>
+          </div>
+        {/if}
       </div>
     </div>
-  </div>
-{/if}
+  {/if}
+</div>
 
 <!-- Add Product Modal -->
 {#if isModalOpen}

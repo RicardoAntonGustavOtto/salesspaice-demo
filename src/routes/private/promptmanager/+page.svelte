@@ -23,12 +23,12 @@
   }
 </script>
 
-<div class="container mx-auto py-6 space-y-6">
+<div class="container mx-auto py-6 px-6 space-y-6">
   <div class="flex justify-between items-center">
     <h1 class="text-3xl font-bold tracking-tight">Prompt Manager</h1>
   </div>
 
-  <div class="grid grid-cols-2 gap-6">
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
     <PromptList
       prompts={filteredPrompts}
       bind:selectedPrompt
