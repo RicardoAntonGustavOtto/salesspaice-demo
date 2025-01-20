@@ -1,7 +1,7 @@
 /** @format */
 
 /**
- * @typedef {'openai' | 'chipp' | 'chippdeep' | 'perplexity'} ModelProvider
+ * @typedef {'openai' | 'anthropic' | 'perplexity'} ModelProvider
  */
 
 const API_BASE_URL = "https://sales-spaice-api-rickenforcer488.replit.app/api";
@@ -15,6 +15,9 @@ const API_BASE_URL = "https://sales-spaice-api-rickenforcer488.replit.app/api";
  */
 export async function callProxy(message, modelProvider, modelName) {
   try {
+    // Debug logging
+    console.log("Making API call with:", { modelProvider, modelName });
+    
     const response = await fetch(`${API_BASE_URL}/${modelProvider}`, {
       method: "POST",
       headers: {
@@ -33,8 +36,7 @@ export async function callProxy(message, modelProvider, modelName) {
     switch (modelProvider) {
       case "openai":
         return data.choices[0].message.content;
-      case "chipp":
-      case "chippdeep":
+      case "anthropic":
         return data[0].messageList[1].content;
       case "perplexity":
         return data;

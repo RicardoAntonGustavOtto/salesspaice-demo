@@ -2,6 +2,8 @@
 
 	import "../../app.css";
 	import { page } from "$app/stores";
+	import { onMount } from "svelte";
+	import { ownCompany } from "$lib/stores/ownCompany";
 	import AppSidebar from "$lib/components/app-sidebar.svelte";
 	import NavActions from "$lib/components/nav-actions.svelte";
 	import * as Breadcrumb from "$lib/components/ui/breadcrumb/index.js";
@@ -22,6 +24,31 @@
       console.error(error)
     }
   }
+
+  // Load company data on mount
+  onMount(async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.id) return;
+
+      const { data: companyData, error } = await supabase
+        .from("owncompany")
+        .select("name, description")
+        .eq("user_id", user.id)
+        .single();
+
+      if (error) throw error;
+
+      if (companyData) {
+        ownCompany.set({
+          name: companyData.name,
+          info: companyData.description
+        });
+      }
+    } catch (err) {
+      console.error("Error loading company data:", err);
+    }
+  });
 </script>
 
 <Sidebar.Provider>

@@ -1,3 +1,4 @@
+<!-- @format -->
 <script lang="ts" module>
 	import AudioWaveform from "lucide-svelte/icons/audio-waveform";
 	import Blocks from "lucide-svelte/icons/blocks";
@@ -12,54 +13,41 @@
 	import LogOut from "lucide-svelte/icons/log-out";
 	import Trash2 from "lucide-svelte/icons/trash-2";
 	import Building2 from "lucide-svelte/icons/building-2";
-	// This is sample data.
-	const data = {
-		teams: [
-			{
-				name: "SalesSpaice",
-				logo: Command,
-				plan: "Enterprise",
-			},
-		],
-		navMain: [
-			{
-				title: "Ask AI",
-				url: "/private/brainstorm",
-				icon: Sparkles,
-			},
-			{
-				title: "dashboard",
-				url: "#",
-				icon: House,
-				isActive: true,
-			},
-			{
-				title: "company data",
-				url: "/private/masterdata",
-				icon: Building2,
-				isActive: false,
-			},
-			{
-				title: "Prospecting",
-				url: "/private/targetcompanyresearch",
-				icon: Building2,
-				isActive: false,
-			},
-		],
-		navSecondary: [
-			{
-				title: "Logout",
-				url: "#",
-				icon: LogOut,
-			},
-		],
-		favorites: [
-			
-		],
-		targetCompanies: [
-			
-		],
-	};
+
+	// Base navigation data
+	const navMain = [
+		{
+			title: "Ask AI",
+			url: "/private/brainstorm",
+			icon: Sparkles,
+		},
+		{
+			title: "dashboard",
+			url: "#",
+			icon: House,
+			isActive: true,
+		},
+		{
+			title: "company data",
+			url: "/private/masterdata",
+			icon: Building2,
+			isActive: false,
+		},
+		{
+			title: "Prospecting",
+			url: "/private/targetcompanyresearch",
+			icon: Building2,
+			isActive: false,
+		},
+	];
+
+	const navSecondary = [
+		{
+			title: "Logout",
+			url: "#",
+			icon: LogOut,
+		},
+	];
 </script>
 
 <script lang="ts">
@@ -70,8 +58,29 @@
 	import TeamSwitcher from "$lib/components/team-switcher.svelte";
 	import * as Sidebar from "$lib/components/ui/sidebar/index.js";
 	import type { ComponentProps } from "svelte";
+	import { ownCompany } from "$lib/stores/ownCompany";
+	import { page } from "$app/stores";
 
 	let { ref = $bindable(null), ...restProps }: ComponentProps<typeof Sidebar.Root> = $props();
+
+	// Get user email from supabase session
+	let userEmail = $derived($page.data?.session?.user?.email || '');
+	let userName = $derived(userEmail.split('@')[0]);
+
+	// Reactive data object
+	let data = $derived({
+		teams: [
+			{
+				name: userName ? `${userName} - ${$ownCompany.name || 'SalesSpaice'}` : 'SalesSpaice',
+				logo: Command,
+				plan: "Enterprise",
+			},
+		],
+		navMain,
+		navSecondary,
+		favorites: [],
+		targetCompanies: [],
+	});
 </script>
 
 <Sidebar.Root bind:ref class="border-r-0" {...restProps}>

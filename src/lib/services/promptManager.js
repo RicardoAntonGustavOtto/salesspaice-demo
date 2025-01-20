@@ -30,10 +30,10 @@ export function getPrompt(promptId, variables = {}) {
     finalPrompt = finalPrompt.replace(regex, value || ""); // Handle undefined values
   });
 
-  // Return both the processed prompt and the configuration
+  // Return both the processed prompt and the configuration, using the configured values
   return {
     prompt: finalPrompt,
-    model: promptTemplate.model || "gpt-4", // Provide defaults
-    provider: promptTemplate.provider || "openai",
+    model: promptTemplate.model,
+    provider: promptTemplate.provider,
   };
 }
