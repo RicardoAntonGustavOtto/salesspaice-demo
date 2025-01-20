@@ -1,15 +1,25 @@
 <script lang="ts">
-  import { Search } from "lucide-svelte";
+  import { Search, Trash2 } from "lucide-svelte";
   import { Card, CardHeader, CardTitle, CardContent } from "$lib/components/ui/card";
   import { Input } from "$lib/components/ui/input";
+  import { Button } from "$lib/components/ui/button";
   import type { Prompt } from "$lib/types/prompt";
 
   export let prompts: Prompt[] = [];
   export let selectedPrompt: Prompt | null = null;
   export let searchQuery = "";
+  export let onSelect: (prompt: Prompt) => void;
+  export let onDelete: (id: string) => void;
+  export let onSearch: (query: string) => void;
 
-  function handlePromptSelect(prompt: Prompt) {
-    selectedPrompt = prompt;
+  function handleSearchChange(event: Event) {
+    const target = event.target as HTMLInputElement;
+    onSearch(target.value);
+  }
+
+  function handleDelete(id: string, event: Event) {
+    event.stopPropagation();
+    onDelete(id);
   }
 </script>
 
@@ -21,26 +31,37 @@
       <Input
         placeholder="Search prompts..."
         class="pl-8"
-        bind:value={searchQuery}
+        value={searchQuery}
+        on:input={handleSearchChange}
       />
     </div>
   </CardHeader>
   <CardContent>
-    <div class="border rounded-lg">
+    <div class="border rounded-lg divide-y">
       {#each prompts as prompt (prompt.id)}
-        <button
+        <div
           class="w-full px-4 py-3 text-left hover:bg-muted transition-colors
-                 border-b last:border-b-0 flex items-center justify-between
+                 flex items-center justify-between
                  {selectedPrompt?.id === prompt.id ? 'bg-muted' : ''}"
-          onclick={() => handlePromptSelect(prompt)}
         >
-          <div>
+          <button
+            class="flex-1 text-left"
+            on:click={() => onSelect(prompt)}
+          >
             <div class="font-medium">{prompt.name}</div>
             <div class="text-sm text-muted-foreground">
               {prompt.model} • {prompt.provider}
             </div>
-          </div>
-        </button>
+          </button>
+          <Button
+            variant="ghost"
+            size="icon"
+            class="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+            on:click={(e) => handleDelete(prompt.id, e)}
+          >
+            <Trash2 class="h-4 w-4" />
+          </Button>
+        </div>
       {/each}
     </div>
   </CardContent>
