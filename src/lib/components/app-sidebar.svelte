@@ -29,7 +29,7 @@
 		},
 		{
 			title: "Dashboard",
-			url: "/private/companies",
+			url: "/private/dashboard",
 			icon: Blocks,
 		},
 		{
