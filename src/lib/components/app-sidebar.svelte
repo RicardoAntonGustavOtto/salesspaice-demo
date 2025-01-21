@@ -23,12 +23,12 @@
 			icon: Sparkles,
 		},
 		{
-			title: "dashboard",
+			title: "Dashboard",
 			url: "/private/companies",
 			icon: House,
 		},
 		{
-			title: "company data",
+			title: "Company Data",
 			url: "/private/masterdata",
 			icon: Building2,
 		},
