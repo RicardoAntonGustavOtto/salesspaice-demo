@@ -23,9 +23,14 @@
 			icon: Sparkles,
 		},
 		{
+			title: "Home",
+			url: "/private",
+			icon: House,
+		},
+		{
 			title: "Dashboard",
 			url: "/private/companies",
-			icon: House,
+			icon: Blocks,
 		},
 		{
 			title: "Company Data",
