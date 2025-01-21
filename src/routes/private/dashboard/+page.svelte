@@ -43,7 +43,7 @@
 
   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
     {#each filteredCompanies as company}
-      <a href="/private/companies/{company.id}" class="block hover:opacity-90 transition-opacity">
+      <a href="/private/dashboard/{company.id}" class="block hover:opacity-90 transition-opacity">
         <Card class="h-full">
           <CardHeader>
             <div class="flex items-center space-x-4">
