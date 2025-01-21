@@ -24,21 +24,18 @@
 		},
 		{
 			title: "dashboard",
-			url: "#",
+			url: "/private/companies",
 			icon: House,
-			isActive: true,
 		},
 		{
 			title: "company data",
 			url: "/private/masterdata",
 			icon: Building2,
-			isActive: false,
 		},
 		{
 			title: "Prospecting",
 			url: "/private/targetcompanyresearch",
 			icon: Building2,
-			isActive: false,
 		},
 	];
 
@@ -82,7 +79,18 @@
 		}
 	}
 
-	// Reactive data object
+	// Function to check if a URL matches the current path
+	function isActive(url: string) {
+		if (url === '#') return false;
+		const currentPath = $page.url.pathname;
+		// Check if the URL is the current path or if it's a parent path
+		return currentPath === url || 
+			   (url !== '/private' && currentPath.startsWith(url)) ||
+			   // Special case for company details page
+			   (url === '/private/companies' && currentPath.startsWith('/private/companies/'));
+	}
+
+	// Reactive data object with active states
 	let data = $derived({
 		teams: [
 			{
@@ -91,12 +99,16 @@
 				plan: "Enterprise",
 			},
 		],
-		navMain,
+		navMain: navMain.map(item => ({
+			...item,
+			isActive: isActive(item.url)
+		})),
 		navSecondary: [
 			{
 				title: "Promptmanager",
 				url: "/private/promptmanager",
 				icon: Code,
+				isActive: isActive("/private/promptmanager")
 			},
 			{
 				title: "Logout",

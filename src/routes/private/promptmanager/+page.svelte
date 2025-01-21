@@ -93,7 +93,7 @@
       </DialogDescription>
     </DialogHeader>
     <DialogFooter>
-      <Button variant="outline" onlick={() => (promptToDelete = null)}>Cancel</Button>
+      <Button variant="outline" onclick={() => (promptToDelete = null)}>Cancel</Button>
       <Button variant="destructive" onclick={handlePromptDelete}>Delete</Button>
     </DialogFooter>
   </DialogContent>
