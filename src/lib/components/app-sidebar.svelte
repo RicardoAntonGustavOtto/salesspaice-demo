@@ -33,7 +33,7 @@
 			icon: Blocks,
 		},
 		{
-			title: "Company Data",
+			title: "Master Data",
 			url: "/private/masterdata",
 			icon: Building2,
 		},
