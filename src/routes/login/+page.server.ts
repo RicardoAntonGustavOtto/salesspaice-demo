@@ -27,7 +27,7 @@ export const actions: Actions = {
     // Create user in Supabase
     const supabase = event.locals.supabase;
     const { error } = await supabase.auth.signInWithPassword({
-      email: form.data.username + "@salesspaice.com",
+      email: form.data.username,
       password: form.data.password,
     });
     if (error) {
