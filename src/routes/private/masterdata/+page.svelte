@@ -15,6 +15,9 @@
     name: "",
     description: "",
     products: [],
+    competitor_knowledge: [],
+    sample_emails: [],
+    correction_words: []
   };
   let isLoading = true;
   let isSaving = false;
@@ -31,6 +34,15 @@
   let newTag = "";
   let error = null;
   let saveError = null;
+  let newCompetitor = {
+    name: "",
+    description: ""
+  };
+  let newEmail = "";
+  let newWord = {
+    original: "",
+    correction: ""
+  };
 
   async function loadCompanyData() {
     try {
@@ -294,6 +306,221 @@
       }
     }
   }
+
+  async function addCompetitor() {
+    if (newCompetitor.name && newCompetitor.description) {
+      try {
+        error = null;
+        isSaving = true;
+
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user?.id) throw new Error("No user logged in");
+
+        // Get current company data
+        const { data: currentCompany, error: fetchError } = await supabase
+          .from("owncompany")
+          .select("competitor_knowledge")
+          .eq("user_id", user.id)
+          .single();
+
+        if (fetchError) throw fetchError;
+
+        // Create new competitors array
+        const updatedCompetitors = [
+          ...(currentCompany.competitor_knowledge || []),
+          {
+            name: newCompetitor.name,
+            description: newCompetitor.description,
+            created_at: new Date().toISOString(),
+          },
+        ];
+
+        // Update the database
+        const { error: updateError } = await supabase
+          .from("owncompany")
+          .update({
+            competitor_knowledge: updatedCompetitors,
+          })
+          .eq("user_id", user.id);
+
+        if (updateError) throw updateError;
+
+        // Update local state
+        companyData.competitor_knowledge = updatedCompetitors;
+        newCompetitor = { name: "", description: "" };
+      } catch (err) {
+        console.error("Error adding competitor:", err);
+        error = err.message;
+      } finally {
+        isSaving = false;
+      }
+    }
+  }
+
+  async function deleteCompetitor(index) {
+    try {
+      error = null;
+      isSaving = true;
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user?.id) throw new Error("No user logged in");
+
+      const updatedCompetitors = [...companyData.competitor_knowledge];
+      updatedCompetitors.splice(index, 1);
+
+      const { error: updateError } = await supabase
+        .from("owncompany")
+        .update({
+          competitor_knowledge: updatedCompetitors,
+        })
+        .eq("user_id", user.id);
+
+      if (updateError) throw updateError;
+
+      companyData.competitor_knowledge = updatedCompetitors;
+    } catch (err) {
+      console.error("Error deleting competitor:", err);
+      error = err.message;
+    } finally {
+      isSaving = false;
+    }
+  }
+
+  async function addEmail() {
+    if (newEmail.trim()) {
+      try {
+        error = null;
+        isSaving = true;
+
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user?.id) throw new Error("No user logged in");
+
+        const updatedEmails = [...(companyData.sample_emails || []), newEmail.trim()];
+
+        const { error: updateError } = await supabase
+          .from("owncompany")
+          .update({
+            sample_emails: updatedEmails,
+          })
+          .eq("user_id", user.id);
+
+        if (updateError) throw updateError;
+
+        companyData.sample_emails = updatedEmails;
+        newEmail = "";
+      } catch (err) {
+        console.error("Error adding email:", err);
+        error = err.message;
+      } finally {
+        isSaving = false;
+      }
+    }
+  }
+
+  async function deleteEmail(index) {
+    try {
+      error = null;
+      isSaving = true;
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user?.id) throw new Error("No user logged in");
+
+      const updatedEmails = [...companyData.sample_emails];
+      updatedEmails.splice(index, 1);
+
+      const { error: updateError } = await supabase
+        .from("owncompany")
+        .update({
+          sample_emails: updatedEmails,
+        })
+        .eq("user_id", user.id);
+
+      if (updateError) throw updateError;
+
+      companyData.sample_emails = updatedEmails;
+    } catch (err) {
+      console.error("Error deleting email:", err);
+      error = err.message;
+    } finally {
+      isSaving = false;
+    }
+  }
+
+  async function addWord() {
+    if (newWord.original.trim() && newWord.correction.trim()) {
+      try {
+        error = null;
+        isSaving = true;
+
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user?.id) throw new Error("No user logged in");
+
+        const updatedWords = [...(companyData.correction_words || []), {
+          original: newWord.original.trim(),
+          correction: newWord.correction.trim(),
+          created_at: new Date().toISOString()
+        }];
+
+        const { error: updateError } = await supabase
+          .from("owncompany")
+          .update({
+            correction_words: updatedWords,
+          })
+          .eq("user_id", user.id);
+
+        if (updateError) throw updateError;
+
+        companyData.correction_words = updatedWords;
+        newWord = { original: "", correction: "" };
+      } catch (err) {
+        console.error("Error adding word:", err);
+        error = err.message;
+      } finally {
+        isSaving = false;
+      }
+    }
+  }
+
+  async function deleteWord(index) {
+    try {
+      error = null;
+      isSaving = true;
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user?.id) throw new Error("No user logged in");
+
+      const updatedWords = [...companyData.correction_words];
+      updatedWords.splice(index, 1);
+
+      const { error: updateError } = await supabase
+        .from("owncompany")
+        .update({
+          correction_words: updatedWords,
+        })
+        .eq("user_id", user.id);
+
+      if (updateError) throw updateError;
+
+      companyData.correction_words = updatedWords;
+    } catch (err) {
+      console.error("Error deleting word:", err);
+      error = err.message;
+    } finally {
+      isSaving = false;
+    }
+  }
 </script>
 
 <div class="container mx-auto py-6 px-6 space-y-6">
@@ -404,6 +631,174 @@
             </button>
           </div>
         {/if}
+      </div>
+
+      <!-- Competitors Section -->
+      <div class="space-y-4">
+        <h2 class="text-xl font-semibold tracking-tight">Competitors</h2>
+        <div class="rounded-lg border bg-card p-6 shadow-sm">
+          <div class="space-y-4">
+            <!-- Add Competitor Form -->
+            <div class="space-y-4">
+              <div>
+                <label for="competitorName" class="block text-sm font-medium mb-1">Competitor Name</label>
+                <input
+                  type="text"
+                  id="competitorName"
+                  bind:value={newCompetitor.name}
+                  class="w-full px-3 py-2 rounded-lg bg-background border border-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+              <div>
+                <label for="competitorDescription" class="block text-sm font-medium mb-1">Description</label>
+                <textarea
+                  id="competitorDescription"
+                  bind:value={newCompetitor.description}
+                  rows="3"
+                  class="w-full px-3 py-2 rounded-lg bg-background border border-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                ></textarea>
+              </div>
+              <button
+                on:click={addCompetitor}
+                disabled={isSaving}
+                class="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+              >
+                Add Competitor
+              </button>
+            </div>
+
+            <!-- Competitors List -->
+            {#if companyData.competitor_knowledge?.length > 0}
+              <div class="space-y-4 mt-6">
+                {#each companyData.competitor_knowledge as competitor, index}
+                  <div class="rounded-lg border border-input p-4">
+                    <div class="flex justify-between items-start">
+                      <div>
+                        <h3 class="font-semibold">{competitor.name}</h3>
+                        <p class="text-muted-foreground mt-1">{competitor.description}</p>
+                      </div>
+                      <button
+                        on:click={() => deleteCompetitor(index)}
+                        class="text-muted-foreground hover:text-destructive transition-colors"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            {:else}
+              <p class="text-muted-foreground text-center py-4">No competitors added yet.</p>
+            {/if}
+          </div>
+        </div>
+      </div>
+
+      <!-- Sample Emails Section -->
+      <div class="space-y-4">
+        <h2 class="text-xl font-semibold tracking-tight">Sample Emails</h2>
+        <div class="rounded-lg border bg-card p-6 shadow-sm">
+          <div class="space-y-4">
+            <!-- Add Email Form -->
+            <div class="flex gap-2">
+              <input
+                type="text"
+                bind:value={newEmail}
+                placeholder="Add a sample email..."
+                class="flex-1 px-3 py-2 rounded-lg bg-background border border-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                on:keydown={(e) => e.key === "Enter" && addEmail()}
+              />
+              <button
+                on:click={addEmail}
+                disabled={isSaving}
+                class="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+              >
+                Add
+              </button>
+            </div>
+
+            <!-- Emails List -->
+            {#if companyData.sample_emails?.length > 0}
+              <div class="space-y-2 mt-4">
+                {#each companyData.sample_emails as email, index}
+                  <div class="flex justify-between items-center p-3 rounded-lg border border-input">
+                    <span class="text-sm">{email}</span>
+                    <button
+                      on:click={() => deleteEmail(index)}
+                      class="text-muted-foreground hover:text-destructive transition-colors"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                {/each}
+              </div>
+            {:else}
+              <p class="text-muted-foreground text-center py-4">No sample emails added yet.</p>
+            {/if}
+          </div>
+        </div>
+      </div>
+
+      <!-- Correction Words Section -->
+      <div class="space-y-4">
+        <h2 class="text-xl font-semibold tracking-tight">Correction Words</h2>
+        <div class="rounded-lg border bg-card p-6 shadow-sm">
+          <div class="space-y-4">
+            <!-- Add Word Form -->
+            <div class="grid gap-4">
+              <div>
+                <label for="originalWord" class="block text-sm font-medium mb-1">Original Word</label>
+                <input
+                  type="text"
+                  id="originalWord"
+                  bind:value={newWord.original}
+                  placeholder="Enter the word to be corrected..."
+                  class="w-full px-3 py-2 rounded-lg bg-background border border-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+              <div>
+                <label for="correctionWord" class="block text-sm font-medium mb-1">Correction</label>
+                <input
+                  type="text"
+                  id="correctionWord"
+                  bind:value={newWord.correction}
+                  placeholder="Enter the correct version..."
+                  class="w-full px-3 py-2 rounded-lg bg-background border border-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+              <button
+                on:click={addWord}
+                disabled={isSaving}
+                class="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+              >
+                Add Correction
+              </button>
+            </div>
+
+            <!-- Words List -->
+            {#if companyData.correction_words?.length > 0}
+              <div class="space-y-2 mt-4">
+                {#each companyData.correction_words as word, index}
+                  <div class="flex justify-between items-center p-3 rounded-lg border border-input bg-background">
+                    <div class="flex items-center gap-2">
+                      <span class="text-sm">{word.original}</span>
+                      <span class="text-muted-foreground">→</span>
+                      <span class="text-sm font-medium">{word.correction}</span>
+                    </div>
+                    <button
+                      on:click={() => deleteWord(index)}
+                      class="text-muted-foreground hover:text-destructive transition-colors"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                {/each}
+              </div>
+            {:else}
+              <p class="text-muted-foreground text-center py-4">No correction words added yet.</p>
+            {/if}
+          </div>
+        </div>
       </div>
     </div>
   {/if}

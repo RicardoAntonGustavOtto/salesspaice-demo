@@ -32,6 +32,7 @@
 	"dependencies": {
 		"@supabase/ssr": "^0.5.2",
 		"@supabase/supabase-js": "^2.47.7",
+		"date-fns": "^4.1.0",
 		"marked": "^15.0.4",
 		"pdfjs-dist": "^4.9.155"
 	}
