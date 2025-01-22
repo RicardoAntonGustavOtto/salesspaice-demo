@@ -23,11 +23,6 @@
 			icon: Sparkles,
 		},
 		{
-			title: "Home",
-			url: "/private",
-			icon: House,
-		},
-		{
 			title: "Dashboard",
 			url: "/private/dashboard",
 			icon: Blocks,

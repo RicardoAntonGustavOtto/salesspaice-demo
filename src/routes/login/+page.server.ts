@@ -34,7 +34,7 @@ export const actions: Actions = {
       console.log(error);
       return setError(form, "password", "Invalid email or password");
     } else {
-      return redirect(303, "/private");
+      return redirect(303, "/private/dashboard");
     }
   },
 };
