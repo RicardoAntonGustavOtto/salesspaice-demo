@@ -23,8 +23,20 @@ export const load: PageServerLoad = async ({ params, locals: { supabase } }) => 
         throw error(500, 'Error fetching notes');
     }
 
+    const { data: opportunities, error: opportunitiesError } = await supabase
+        .from('opportunities')
+        .select('*')
+        .eq('target_customer_id', params.id)
+        .order('created_at', { ascending: false });
+
+    if (opportunitiesError) {
+        console.error('Error fetching opportunities:', opportunitiesError);
+        throw error(500, 'Error fetching opportunities');
+    }
+
     return {
         company,
-        notes: notes ?? []
+        notes: notes ?? [],
+        opportunities: opportunities ?? []
     };
 }; 
