@@ -15,7 +15,7 @@ export const prompts = {
       Important: You may only reference {{targetcompany_name}}'s official website.`,
     },
     analyze_annualreport: {
-      id: "analyze_annualreport",
+      id: "analyze_annualreport", 
       model: "gpt-4o-mini",
       provider: "openai",
       content: `You are an expert in the analysis of corporate annual reports with a focus on strategic business alignment. I have provided you with the latest annual report of {{targetcompany_name}}. Here is the annual report: {{targetcompany_annualreport}}
@@ -36,7 +36,7 @@ export const prompts = {
     },
     generate_targetcompany_coldcallingguide: {
       id: "generate_targetcompany_coldcallingguide",
-      model: "gpt-4o-mini",
+      model: "gpt-4o-mini", 
       provider: "openai",
       content: `You are an expert sales assistant. I want you to write a "Cold Calling Guide" for a sales executive from the company {{owncompany_name}} to have as a reference when calling his prospect, named {{prospect_name}} from the company {{targetcompany_name}}.
 
@@ -48,14 +48,14 @@ export const prompts = {
 
       Now that you have completed your research, write the "Cold Calling Guide" with the following sections:(1) Hook: A "hook" to get the prospect's interest in talking to the sales executive. This should combine a business benefit of {{owncompany_name}} with recent news about {{targetcompany_name}}, if available. Include information you learned about {{prospect_name}} if it seems relevant and professional.
 
-      (2) Overview: An easy-to-read overview of {{owncompany_name}}’s benefits, related specifically to the prospect's business challenges. Present this as a table with gridlines to improve readability. Be as specific as possible, citing sources for the {{targetcompany_name}}'s business challenges/focus if available.
+      (2) Overview: An easy-to-read overview of {{owncompany_name}}'s benefits, related specifically to the prospect's business challenges. Present this as a table with gridlines to improve readability. Be as specific as possible, citing sources for the {{targetcompany_name}}'s business challenges/focus if available.
 
       (3) Objections: A list of potential objections the prospect might raise, along with suggested responses. Present this information in a table with gridlines.`,
     },
     prospecting_email: {
       id: "prospecting_email",
       model: "gpt-4o",
-      provider: "openai",
+      provider: "openai", 
       content: `You are an expert sales assistant. I want you to write a "Cold Calling Guide" for a sales executive from the company {{owncompany_name}} to have as a reference when calling his prospect, named {{prospect_name}} from the company {{targetcompany_name}}.
 
       In order to understand the two companies, study info about the sales executive's company, {{owncompany_name}}, here: {{owncompany_info}}
@@ -66,9 +66,21 @@ export const prompts = {
 
       Now that you have completed your research, write the "Cold Calling Guide" with the following sections:(1) Hook: A "hook" to get the prospect's interest in talking to the sales executive. This should combine a business benefit of {{owncompany_name}} with recent news about {{targetcompany_name}}, if available. Include information you learned about {{prospect_name}} if it seems relevant and professional.
 
-      (2) Overview: An easy-to-read overview of {{owncompany_name}}’s benefits, related specifically to the prospect's business challenges. Present this as a table with gridlines to improve readability. Be as specific as possible, citing sources for the {{targetcompany_name}}'s business challenges/focus if available.
+      (2) Overview: An easy-to-read overview of {{owncompany_name}}'s benefits, related specifically to the prospect's business challenges. Present this as a table with gridlines to improve readability. Be as specific as possible, citing sources for the {{targetcompany_name}}'s business challenges/focus if available.
 
       (3) Objections: A list of potential objections the prospect might raise, along with suggested responses. Present this information in a table with gridlines.`,
+    },
+    brainstorm_analysis: {
+      id: "brainstorm_analysis",
+      model: "perplexity",
+      provider: "perplexity",
+      content: `{{system_prompt}}
+
+Chat History:
+{{chat_history}}
+
+User: {{user_input}}
+Assistant:`,
     },
   },
 

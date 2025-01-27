@@ -2,7 +2,7 @@
   import { Tabs, TabsContent, TabsList, TabsTrigger } from "$lib/components/ui/tabs";
   import { Card, CardHeader, CardContent, CardTitle, CardDescription } from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
-  import { Plus, Calendar, FileText, MessageSquare, Building2, Globe, MapPin, Users, Clock, Link } from "lucide-svelte";
+  import { Plus, Calendar, FileText, MessageSquare, Building2, Globe, MapPin, Users, Clock, Link, Trash2 } from "lucide-svelte";
   import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "$lib/components/ui/dialog";
   import { Label } from "$lib/components/ui/label";
   import { Input } from "$lib/components/ui/input";
@@ -10,6 +10,7 @@
   import { Badge } from "$lib/components/ui/badge";
   import { invalidate } from "$app/navigation";
   import type { PageData } from "./$types";
+  import * as Select from "$lib/components/ui/select";
 
   interface TargetCompany {
     id: string;
@@ -29,8 +30,11 @@
     id: string;
     title: string;
     content: string;
-    date: string;
+    type: 'general' | 'meeting' | 'transcript';
+    tags: string[];
+    metadata: Record<string, any>;
     created_at: string;
+    created_by: string;
   }
 
   interface Meeting {
@@ -50,29 +54,21 @@
     date: string;
   }
 
-  let { data } = $props<PageData>();
-  let { company, notes, meetings, transcripts } = $derived<{
+  let { data } = $props();
+  let { company, notes } = $derived(data as {
     company: TargetCompany;
     notes: Note[];
-    meetings: Meeting[];
-    transcripts: Transcript[];
-  }>(data);
+  });
 
-  let activeTab = $state("notes");
+  let activeTag = $state<string | null>(null);
   let showAddNote = $state(false);
-  let showScheduleMeeting = $state(false);
 
   // Note form state
   let noteTitle = $state("");
   let noteContent = $state("");
-
-  // Meeting form state
-  let meetingTitle = $state("");
-  let meetingDate = $state("");
-  let meetingTime = $state("");
-  let meetingLocation = $state("");
-  let meetingAttendees = $state("");
-  let meetingSummary = $state("");
+  let noteType = $state<'general' | 'meeting' | 'transcript'>('general');
+  let noteTags = $state<string[]>([]);
+  let noteMetadata = $state<Record<string, any>>({});
 
   function formatDate(date: string) {
     return new Date(date).toLocaleString('en-US', {
@@ -84,22 +80,22 @@
     });
   }
 
-  function getUpcomingMeetings() {
-    const now = new Date();
-    return meetings?.filter(m => new Date(m.scheduled_for) >= now)
-      .sort((a, b) => new Date(a.scheduled_for).getTime() - new Date(b.scheduled_for).getTime()) ?? [];
-  }
-
-  function getPastMeetings() {
-    const now = new Date();
-    return meetings?.filter(m => new Date(m.scheduled_for) < now)
-      .sort((a, b) => new Date(b.scheduled_for).getTime() - new Date(a.scheduled_for).getTime()) ?? [];
-  }
-
   function getSortedNotes() {
-    return [...(notes ?? [])].sort((a, b) => 
+    let filteredNotes = notes ?? [];
+    if (activeTag) {
+      filteredNotes = filteredNotes.filter(note => note.tags.includes(activeTag as string));
+    }
+    return [...filteredNotes].sort((a, b) => 
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
+  }
+
+  function getAllTags() {
+    const tagSet = new Set<string>();
+    notes?.forEach(note => {
+      note.tags.forEach(tag => tagSet.add(tag));
+    });
+    return Array.from(tagSet);
   }
 
   async function handleAddNote(event: SubmitEvent) {
@@ -112,6 +108,9 @@
       body: JSON.stringify({
         title: formData.get('title'),
         content: formData.get('content'),
+        type: noteType,
+        tags: noteTags,
+        metadata: noteMetadata
       }),
       headers: {
         'Content-Type': 'application/json'
@@ -122,41 +121,20 @@
       showAddNote = false;
       noteTitle = "";
       noteContent = "";
-      await invalidate('notes');
+      noteType = 'general';
+      noteTags = [];
+      noteMetadata = {};
+      await invalidate((path) => path.includes('/api/companies'));
     }
   }
 
-  async function handleScheduleMeeting(event: SubmitEvent) {
-    event.preventDefault();
-    const form = event.target as HTMLFormElement;
-    const formData = new FormData(form);
-
-    const dateTime = `${formData.get('date')}T${formData.get('time')}`;
-    const attendeesList = formData.get('attendees')?.toString().split(',').map(a => a.trim()) ?? [];
-
-    const response = await fetch(`/api/companies/${company.id}/meetings`, {
-      method: 'POST',
-      body: JSON.stringify({
-        title: formData.get('title'),
-        scheduled_for: dateTime,
-        location: formData.get('location'),
-        attendees: attendeesList,
-        summary: formData.get('summary')
-      }),
-      headers: {
-        'Content-Type': 'application/json'
-      }
+  async function handleDeleteNote(noteId: string) {
+    const response = await fetch(`/api/companies/${company.id}/notes?noteId=${noteId}`, {
+      method: 'DELETE'
     });
 
     if (response.ok) {
-      showScheduleMeeting = false;
-      meetingTitle = "";
-      meetingDate = "";
-      meetingTime = "";
-      meetingLocation = "";
-      meetingAttendees = "";
-      meetingSummary = "";
-      await invalidate('meetings');
+      await invalidate((path) => path.includes('/api/companies'));
     }
   }
 </script>
@@ -173,16 +151,6 @@
             <Badge variant="outline">{company.size} employees</Badge>
           {/if}
         </div>
-      </div>
-      <div class="flex gap-2">
-        <Button variant="outline" onclick={() => showScheduleMeeting = true}>
-          <Calendar class="w-4 h-4 mr-2" />
-          Schedule Meeting
-        </Button>
-        <Button onclick={() => showAddNote = true}>
-          <Plus class="w-4 h-4 mr-2" />
-          Add Note
-        </Button>
       </div>
     </div>
   </div>
@@ -227,191 +195,83 @@
           </dl>
         </CardContent>
       </Card>
-
-      {#if getUpcomingMeetings().length > 0}
-        <Card>
-          <CardHeader>
-            <CardTitle class="flex items-center gap-2">
-              <Clock class="w-5 h-5" />
-              Upcoming Meetings
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div class="space-y-4">
-              {#each getUpcomingMeetings() as meeting}
-                <div class="border-l-2 border-primary pl-4">
-                  <h4 class="font-medium">{meeting.title}</h4>
-                  <p class="text-sm text-muted-foreground">{formatDate(meeting.scheduled_for)}</p>
-                  <p class="text-sm text-muted-foreground">{meeting.location}</p>
-                  {#if meeting.attendees?.length}
-                    <p class="text-sm mt-1 text-muted-foreground">{meeting.attendees.join(', ')}</p>
-                  {/if}
-                </div>
-              {/each}
-            </div>
-          </CardContent>
-        </Card>
-      {/if}
     </div>
 
     <!-- Main Content Area -->
     <div class="lg:col-span-2">
-      <Tabs value={activeTab} class="w-full" onValueChange={(value: string) => activeTab = value}>
-        <TabsList class="grid w-full grid-cols-3">
-          <TabsTrigger value="notes" class="flex items-center gap-2">
-            <FileText class="w-4 h-4" />
-            Notes ({notes?.length ?? 0})
-          </TabsTrigger>
-          <TabsTrigger value="meetings" class="flex items-center gap-2">
-            <Calendar class="w-4 h-4" />
-            Meetings ({meetings?.length ?? 0})
-          </TabsTrigger>
-          <TabsTrigger value="transcripts" class="flex items-center gap-2">
-            <MessageSquare class="w-4 h-4" />
-            Transcripts ({transcripts?.length ?? 0})
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="notes">
-          <Card>
-            <CardHeader>
-              <div class="flex justify-between items-center">
-                <div>
-                  <CardTitle>Notes</CardTitle>
-                  <CardDescription>All notes related to {company.name}</CardDescription>
-                </div>
-                <Button onclick={() => showAddNote = true}>
-                  <Plus class="w-4 h-4 mr-2" />
-                  Add Note
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div class="space-y-6">
-                {#each getSortedNotes() as note}
-                  <div class="border-l-2 border-primary pl-4 py-2">
-                    <div class="flex justify-between items-start mb-2">
+      <Card>
+        <CardHeader>
+          <div class="flex justify-between items-center">
+            <div>
+              <CardTitle>Notes</CardTitle>
+              <CardDescription>All notes related to {company.name}</CardDescription>
+            </div>
+            <Button onclick={() => showAddNote = true}>
+              <Plus class="w-4 h-4 mr-2" />
+              Add Note
+            </Button>
+          </div>
+          <div class="flex gap-2 mt-4 flex-wrap">
+            <Button 
+              variant={activeTag === null ? "secondary" : "outline"}
+              onclick={() => activeTag = null}
+              size="sm"
+            >
+              All
+            </Button>
+            {#each getAllTags() as tag}
+              <Button 
+                variant={activeTag === tag ? "secondary" : "outline"}
+                onclick={() => activeTag = tag}
+                size="sm"
+              >
+                {tag}
+              </Button>
+            {/each}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div class="space-y-6">
+            {#each getSortedNotes() as note}
+              <div class="border-l-2 border-primary pl-4 py-2">
+                <div class="flex justify-between items-start mb-2">
+                  <div>
+                    <div class="flex items-center gap-2">
                       <h4 class="font-medium">{note.title}</h4>
-                      <span class="text-sm text-muted-foreground">{formatDate(note.created_at)}</span>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        class="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onclick={() => handleDeleteNote(note.id)}
+                      >
+                        <Trash2 class="h-4 w-4" />
+                      </Button>
                     </div>
-                    <p class="text-muted-foreground whitespace-pre-line">{note.content}</p>
-                  </div>
-                {:else}
-                  <div class="text-center py-8">
-                    <MessageSquare class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                    <p class="text-muted-foreground">No notes yet. Click "Add Note" to create one.</p>
-                  </div>
-                {/each}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="meetings">
-          <Card>
-            <CardHeader>
-              <div class="flex justify-between items-center">
-                <div>
-                  <CardTitle>Meetings</CardTitle>
-                  <CardDescription>Past and upcoming meetings with {company.name}</CardDescription>
-                </div>
-                <Button onclick={() => showScheduleMeeting = true}>
-                  <Plus class="w-4 h-4 mr-2" />
-                  Schedule Meeting
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {#if getUpcomingMeetings().length > 0}
-                <div class="mb-8">
-                  <h3 class="text-lg font-semibold mb-4">Upcoming Meetings</h3>
-                  <div class="space-y-6">
-                    {#each getUpcomingMeetings() as meeting}
-                      <div class="border-l-2 border-primary pl-4 py-2">
-                        <div class="flex justify-between items-start mb-2">
-                          <div>
-                            <h4 class="font-medium">{meeting.title}</h4>
-                            <p class="text-sm text-muted-foreground">{meeting.location}</p>
-                            {#if meeting.attendees?.length}
-                              <p class="text-sm text-muted-foreground">{meeting.attendees.join(', ')}</p>
-                            {/if}
-                          </div>
-                          <span class="text-sm text-muted-foreground">{formatDate(meeting.scheduled_for)}</span>
-                        </div>
-                        {#if meeting.summary}
-                          <p class="text-muted-foreground mt-2">{meeting.summary}</p>
-                        {/if}
-                      </div>
-                    {/each}
-                  </div>
-                </div>
-              {/if}
-
-              {#if getPastMeetings().length > 0}
-                <div>
-                  <h3 class="text-lg font-semibold mb-4">Past Meetings</h3>
-                  <div class="space-y-6">
-                    {#each getPastMeetings() as meeting}
-                      <div class="border-l-2 border-muted pl-4 py-2">
-                        <div class="flex justify-between items-start mb-2">
-                          <div>
-                            <h4 class="font-medium">{meeting.title}</h4>
-                            <p class="text-sm text-muted-foreground">{meeting.location}</p>
-                            {#if meeting.attendees?.length}
-                              <p class="text-sm text-muted-foreground">{meeting.attendees.join(', ')}</p>
-                            {/if}
-                          </div>
-                          <span class="text-sm text-muted-foreground">{formatDate(meeting.scheduled_for)}</span>
-                        </div>
-                        {#if meeting.summary}
-                          <p class="text-muted-foreground mt-2">{meeting.summary}</p>
-                        {/if}
-                      </div>
-                    {/each}
-                  </div>
-                </div>
-              {:else}
-                <div class="text-center py-8">
-                  <Calendar class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <p class="text-muted-foreground">No meetings scheduled yet.</p>
-                </div>
-              {/if}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="transcripts">
-          <Card>
-            <CardHeader>
-              <CardTitle>Transcripts</CardTitle>
-              <CardDescription>Meeting transcripts and recordings</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div class="space-y-6">
-                {#each transcripts ?? [] as transcript}
-                  <div class="border-l-2 border-primary pl-4 py-2">
-                    <div class="flex justify-between items-start mb-2">
-                      <div>
-                        <h4 class="font-medium">{transcript.title}</h4>
-                        {#if transcript.duration}
-                          <p class="text-sm text-muted-foreground">Duration: {transcript.duration}</p>
-                        {/if}
-                      </div>
-                      <span class="text-sm text-muted-foreground">{transcript.date}</span>
+                    <div class="flex gap-2 mt-1">
+                      <Badge variant="secondary">{note.type}</Badge>
+                      {#each note.tags as tag}
+                        <Badge variant="outline">{tag}</Badge>
+                      {/each}
                     </div>
-                    {#if transcript.summary}
-                      <p class="text-muted-foreground mt-2">{transcript.summary}</p>
-                    {/if}
-                    <Button variant="link" class="px-0 mt-2">View Full Transcript</Button>
                   </div>
-                {:else}
-                  <p class="text-muted-foreground">No transcripts available.</p>
-                {/each}
+                  <span class="text-sm text-muted-foreground">{formatDate(note.created_at)}</span>
+                </div>
+                <p class="text-muted-foreground whitespace-pre-line">{note.content}</p>
+                {#if note.type === 'meeting' && note.metadata.attendees}
+                  <div class="mt-2 text-sm text-muted-foreground">
+                    <strong>Attendees:</strong> {note.metadata.attendees.join(', ')}
+                  </div>
+                {/if}
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            {:else}
+              <div class="text-center py-8">
+                <MessageSquare class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <p class="text-muted-foreground">No notes yet. Click "Add Note" to create one.</p>
+              </div>
+            {/each}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   </div>
 
@@ -431,6 +291,60 @@
             <Input id="title" name="title" bind:value={noteTitle} required />
           </div>
           <div class="grid gap-2">
+            <Label for="type">Type</Label>
+            <Select.Root type="single" value={noteType} onValueChange={(value) => noteType = value as 'general' | 'meeting' | 'transcript'}>
+              <Select.Trigger class="w-full">
+                <span class="capitalize">{noteType}</span>
+              </Select.Trigger>
+              <Select.Content>
+                <Select.Group>
+                  <Select.Item value="general">
+                    <span class="capitalize">General</span>
+                  </Select.Item>
+                  <Select.Item value="meeting">
+                    <span class="capitalize">Meeting</span>
+                  </Select.Item>
+                  <Select.Item value="transcript">
+                    <span class="capitalize">Transcript</span>
+                  </Select.Item>
+                </Select.Group>
+              </Select.Content>
+            </Select.Root>
+          </div>
+          <div class="grid gap-2">
+            <Label for="tags">Tags (comma-separated)</Label>
+            <Input 
+              id="tags" 
+              name="tags" 
+              placeholder="Enter tags..."
+              onchange={(e) => {
+                noteTags = e.currentTarget.value
+                  .split(',')
+                  .map(tag => tag.trim())
+                  .filter(tag => tag.length > 0);
+              }}
+            />
+          </div>
+          {#if noteType === 'meeting'}
+            <div class="grid gap-2">
+              <Label for="attendees">Attendees (comma-separated)</Label>
+              <Input 
+                id="attendees" 
+                name="attendees" 
+                placeholder="Enter attendees..."
+                onchange={(e) => {
+                  noteMetadata = {
+                    ...noteMetadata,
+                    attendees: e.currentTarget.value
+                      .split(',')
+                      .map(attendee => attendee.trim())
+                      .filter(attendee => attendee.length > 0)
+                  };
+                }}
+              />
+            </div>
+          {/if}
+          <div class="grid gap-2">
             <Label for="content">Content</Label>
             <Textarea id="content" name="content" bind:value={noteContent} required rows={5} />
           </div>
@@ -440,53 +354,6 @@
             Cancel
           </Button>
           <Button type="submit">Save Note</Button>
-        </DialogFooter>
-      </form>
-    </DialogContent>
-  </Dialog>
-
-  <Dialog bind:open={showScheduleMeeting}>
-    <DialogContent>
-      <form onsubmit={handleScheduleMeeting}>
-        <DialogHeader>
-          <DialogTitle>Schedule Meeting</DialogTitle>
-          <DialogDescription>
-            Schedule a meeting with {company.name}
-          </DialogDescription>
-        </DialogHeader>
-        <div class="grid gap-4 py-4">
-          <div class="grid gap-2">
-            <Label for="title">Title</Label>
-            <Input id="title" name="title" bind:value={meetingTitle} required />
-          </div>
-          <div class="grid grid-cols-2 gap-4">
-            <div class="grid gap-2">
-              <Label for="date">Date</Label>
-              <Input id="date" name="date" type="date" bind:value={meetingDate} required />
-            </div>
-            <div class="grid gap-2">
-              <Label for="time">Time</Label>
-              <Input id="time" name="time" type="time" bind:value={meetingTime} required />
-            </div>
-          </div>
-          <div class="grid gap-2">
-            <Label for="location">Location</Label>
-            <Input id="location" name="location" bind:value={meetingLocation} required />
-          </div>
-          <div class="grid gap-2">
-            <Label for="attendees">Attendees (comma-separated)</Label>
-            <Input id="attendees" name="attendees" bind:value={meetingAttendees} placeholder="John Doe, Jane Smith" />
-          </div>
-          <div class="grid gap-2">
-            <Label for="summary">Agenda / Summary</Label>
-            <Textarea id="summary" name="summary" bind:value={meetingSummary} rows={3} />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button type="button" variant="outline" onclick={() => showScheduleMeeting = false}>
-            Cancel
-          </Button>
-          <Button type="submit">Schedule Meeting</Button>
         </DialogFooter>
       </form>
     </DialogContent>
