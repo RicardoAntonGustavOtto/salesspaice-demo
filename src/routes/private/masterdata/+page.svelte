@@ -1,7 +1,13 @@
 <!-- @format -->
-<script>
+<script lang="ts">
   import { fade } from "svelte/transition";
   import { onMount } from "svelte";
+  import * as Collapsible from "$lib/components/ui/collapsible/index.js";
+  import ChevronRight from "lucide-svelte/icons/chevron-right";
+  import Building2 from "lucide-svelte/icons/building-2";
+  import Users from "lucide-svelte/icons/users";
+  import Mail from "lucide-svelte/icons/mail";
+  import FileText from "lucide-svelte/icons/file-text";
 
   export let data;
   $: ({ supabase, user } = data);
@@ -524,8 +530,11 @@
 </script>
 
 <div class="container mx-auto py-6 px-6 space-y-6">
-  <div class="flex justify-between items-center">
-    <h1 class="text-3xl font-bold tracking-tight">Master Data</h1>
+  <div class="flex justify-between items-center mb-8">
+    <div class="space-y-1">
+      <h1 class="text-3xl font-bold tracking-tight">Master Data</h1>
+      <p class="text-muted-foreground">Manage your organization's master data and settings.</p>
+    </div>
   </div>
 
   {#if isLoading}
@@ -538,167 +547,246 @@
     </div>
   {:else}
     <div class="grid gap-6">
-      <!-- Company Information -->
-      <div class="space-y-4">
-        <div class="grid gap-4">
-          <div>
-            <label for="companyName" class="block text-sm font-medium mb-1">Company Name</label>
-            <input
-              type="text"
-              id="companyName"
-              bind:value={companyData.name}
-              class="w-full px-3 py-2 rounded-lg bg-background border border-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-          <div>
-            <label for="companyDescription" class="block text-sm font-medium mb-1">Information</label>
-            <textarea
-              id="companyDescription"
-              bind:value={companyData.description}
-              rows="4"
-              class="w-full px-3 py-2 rounded-lg bg-background border border-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            ></textarea>
-          </div>
-          <div class="flex justify-end">
-            <button
-              on:click={saveCompanyData}
-              disabled={isSaving}
-              class="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
-            >
-              {isSaving ? 'Saving...' : 'Save Changes'}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Products Section -->
-      <div class="space-y-4">
-        <h2 class="text-xl font-semibold tracking-tight">Products</h2>
-        {#if companyData.products?.length === 0}
-          <div class="flex flex-col items-center justify-center min-h-[20vh]">
-            <button
-              on:click={openModal}
-              class="border-2 border-dashed border-muted rounded-lg p-12 hover:border-muted/80 hover:bg-muted/5 transition-colors"
-            >
-              <span class="text-xl">+</span>
-              <p class="mt-2 text-muted-foreground">
-                No products added yet. Click to add your first product.
-              </p>
-            </button>
-          </div>
-        {:else}
-          <div class="rounded-lg border bg-card p-6 shadow-sm relative">
-            {#if isLoading}
-              <div class="absolute inset-0 bg-background/80 flex items-center justify-center">
-                <div class="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-foreground"></div>
-              </div>
-            {/if}
-            <div class="space-y-4">
-              {#each companyData.products as product (product.id)}
-                <div class="rounded-lg border border-input p-4">
-                  <h3 class="font-semibold">{product.name}</h3>
-                  <p class="text-muted-foreground mt-1">{product.description}</p>
-                  {#if product.tags?.length > 0}
-                    <div class="flex flex-wrap gap-2 mt-2">
-                      {#each product.tags as tag}
-                        <span class="px-2 py-1 bg-muted rounded-full text-sm">
-                          {tag}
-                        </span>
-                      {/each}
-                    </div>
-                  {/if}
-                  <div class="flex justify-between items-center mt-2">
-                    <span class="text-xs text-muted-foreground">
-                      Added: {new Date(product.created_at).toLocaleDateString()}
-                    </span>
-                    <button
-                      on:click={() => openDeleteModal(product)}
-                      class="text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              {/each}
-            </div>
-          </div>
-          <div class="flex justify-end">
-            <button
-              on:click={openModal}
-              class="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-            >
-              Add Product
-            </button>
-          </div>
-        {/if}
-      </div>
-
-      <!-- Competitors Section -->
-      <div class="space-y-4">
-        <h2 class="text-xl font-semibold tracking-tight">Competitors</h2>
-        <div class="rounded-lg border bg-card p-6 shadow-sm">
-          <div class="space-y-4">
-            <!-- Add Competitor Form -->
-            <div class="space-y-4">
+      <!-- Company Information Section -->
+      <Collapsible.Root class="border rounded-lg">
+        <div class="border-b">
+          <Collapsible.Trigger class="flex w-full items-center justify-between p-4 hover:bg-muted/50">
+            <div class="flex items-center space-x-3">
+              <Building2 class="size-5" />
               <div>
-                <label for="competitorName" class="block text-sm font-medium mb-1">Competitor Name</label>
+                <h2 class="text-lg font-semibold">About my company</h2>
+                <p class="text-sm text-muted-foreground">Basic information about your company</p>
+              </div>
+            </div>
+            <ChevronRight class="size-4 transition-transform duration-200 data-[state=open]:rotate-90" />
+          </Collapsible.Trigger>
+        </div>
+        <Collapsible.Content>
+          <div class="p-4 space-y-4">
+            <div class="grid gap-4">
+              <div>
+                <label for="companyName" class="block text-sm font-medium mb-1">Company Name</label>
                 <input
                   type="text"
-                  id="competitorName"
-                  bind:value={newCompetitor.name}
+                  id="companyName"
+                  bind:value={companyData.name}
                   class="w-full px-3 py-2 rounded-lg bg-background border border-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 />
               </div>
               <div>
-                <label for="competitorDescription" class="block text-sm font-medium mb-1">Description</label>
+                <label for="companyDescription" class="block text-sm font-medium mb-1">Information</label>
                 <textarea
-                  id="competitorDescription"
-                  bind:value={newCompetitor.description}
-                  rows="3"
+                  id="companyDescription"
+                  bind:value={companyData.description}
+                  rows="4"
                   class="w-full px-3 py-2 rounded-lg bg-background border border-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 ></textarea>
               </div>
-              <button
-                on:click={addCompetitor}
-                disabled={isSaving}
-                class="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
-              >
-                Add Competitor
-              </button>
+              <div class="flex justify-end">
+                <button
+                  on:click={saveCompanyData}
+                  disabled={isSaving}
+                  class="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+                >
+                  {isSaving ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
             </div>
-
-            <!-- Competitors List -->
-            {#if companyData.competitor_knowledge?.length > 0}
-              <div class="space-y-4 mt-6">
-                {#each companyData.competitor_knowledge as competitor, index}
+          </div>
+          <div class="p-4 space-y-4">
+            {#if companyData.products?.length === 0}
+              <div class="flex flex-col items-center justify-center min-h-[20vh]">
+                <button
+                  on:click={openModal}
+                  class="border-2 border-dashed border-muted rounded-lg p-12 hover:border-muted/80 hover:bg-muted/5 transition-colors"
+                >
+                  <span class="text-xl">+</span>
+                  <p class="mt-2 text-muted-foreground">
+                    No products added yet. Click to add your first product.
+                  </p>
+                </button>
+              </div>
+            {:else}
+              <div class="space-y-4">
+                {#each companyData.products as product (product.id)}
                   <div class="rounded-lg border border-input p-4">
-                    <div class="flex justify-between items-start">
-                      <div>
-                        <h3 class="font-semibold">{competitor.name}</h3>
-                        <p class="text-muted-foreground mt-1">{competitor.description}</p>
+                    <h3 class="font-semibold">{product.name}</h3>
+                    <p class="text-muted-foreground mt-1">{product.description}</p>
+                    {#if product.tags?.length > 0}
+                      <div class="flex flex-wrap gap-2 mt-2">
+                        {#each product.tags as tag}
+                          <span class="px-2 py-1 bg-muted rounded-full text-sm">
+                            {tag}
+                          </span>
+                        {/each}
                       </div>
+                    {/if}
+                    <div class="flex justify-between items-center mt-2">
+                      <span class="text-xs text-muted-foreground">
+                        Added: {new Date(product.created_at).toLocaleDateString()}
+                      </span>
                       <button
-                        on:click={() => deleteCompetitor(index)}
-                        class="text-muted-foreground hover:text-destructive transition-colors"
+                        on:click={() => openDeleteModal(product)}
+                        class="text-muted-foreground hover:text-foreground transition-colors"
                       >
                         Delete
                       </button>
                     </div>
                   </div>
                 {/each}
+                <div class="flex justify-end">
+                  <button
+                    on:click={openModal}
+                    class="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                  >
+                    Add Product
+                  </button>
+                </div>
               </div>
-            {:else}
-              <p class="text-muted-foreground text-center py-4">No competitors added yet.</p>
             {/if}
           </div>
+        </Collapsible.Content>
+      </Collapsible.Root>
+      <Collapsible.Root class="border rounded-lg">
+        <div class="border-b">
+          <Collapsible.Trigger class="flex w-full items-center justify-between p-4 hover:bg-muted/50">
+            <div class="flex items-center space-x-3">
+              <Building2 class="size-5" />
+              <div>
+                <h2 class="text-lg font-semibold">About me</h2>
+                <p class="text-sm text-muted-foreground">Basic information about your company</p>
+              </div>
+            </div>
+            <ChevronRight class="size-4 transition-transform duration-200 data-[state=open]:rotate-90" />
+          </Collapsible.Trigger>
         </div>
-      </div>
+        <Collapsible.Content>
+          <div class="p-4 space-y-4">
+            <div class="grid gap-4">
+              <div>
+                <label for="companyName" class="block text-sm font-medium mb-1">Company Name</label>
+                <input
+                  type="text"
+                  id="companyName"
+                  bind:value={companyData.name}
+                  class="w-full px-3 py-2 rounded-lg bg-background border border-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+              <div>
+                <label for="companyDescription" class="block text-sm font-medium mb-1">Information</label>
+                <textarea
+                  id="companyDescription"
+                  bind:value={companyData.description}
+                  rows="4"
+                  class="w-full px-3 py-2 rounded-lg bg-background border border-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                ></textarea>
+              </div>
+              <div class="flex justify-end">
+                <button
+                  on:click={saveCompanyData}
+                  disabled={isSaving}
+                  class="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+                >
+                  {isSaving ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </Collapsible.Content>
+      </Collapsible.Root>
+
+     
+
+      <!-- Competitors Section -->
+      <Collapsible.Root class="border rounded-lg">
+        <div class="border-b">
+          <Collapsible.Trigger class="flex w-full items-center justify-between p-4 hover:bg-muted/50">
+            <div class="flex items-center space-x-3">
+              <Users class="size-5" />
+              <div>
+                <h2 class="text-lg font-semibold">Competitors</h2>
+                <p class="text-sm text-muted-foreground">Track and analyze your competitors</p>
+              </div>
+            </div>
+            <ChevronRight class="size-4 transition-transform duration-200 data-[state=open]:rotate-90" />
+          </Collapsible.Trigger>
+        </div>
+        <Collapsible.Content>
+          <div class="p-4 space-y-4">
+            <div class="space-y-4">
+              <!-- Add Competitor Form -->
+              <div class="space-y-4">
+                <div>
+                  <label for="competitorName" class="block text-sm font-medium mb-1">Competitor Name</label>
+                  <input
+                    type="text"
+                    id="competitorName"
+                    bind:value={newCompetitor.name}
+                    class="w-full px-3 py-2 rounded-lg bg-background border border-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+                <div>
+                  <label for="competitorDescription" class="block text-sm font-medium mb-1">Description</label>
+                  <textarea
+                    id="competitorDescription"
+                    bind:value={newCompetitor.description}
+                    rows="3"
+                    class="w-full px-3 py-2 rounded-lg bg-background border border-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  ></textarea>
+                </div>
+                <button
+                  on:click={addCompetitor}
+                  disabled={isSaving}
+                  class="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+                >
+                  Add Competitor
+                </button>
+              </div>
+
+              <!-- Competitors List -->
+              {#if companyData.competitor_knowledge?.length > 0}
+                <div class="space-y-4 mt-6">
+                  {#each companyData.competitor_knowledge as competitor, index}
+                    <div class="rounded-lg border border-input p-4">
+                      <div class="flex justify-between items-start">
+                        <div>
+                          <h3 class="font-semibold">{competitor.name}</h3>
+                          <p class="text-muted-foreground mt-1">{competitor.description}</p>
+                        </div>
+                        <button
+                          on:click={() => deleteCompetitor(index)}
+                          class="text-muted-foreground hover:text-destructive transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  {/each}
+                </div>
+              {:else}
+                <p class="text-muted-foreground text-center py-4">No competitors added yet.</p>
+              {/if}
+            </div>
+          </div>
+        </Collapsible.Content>
+      </Collapsible.Root>
 
       <!-- Sample Emails Section -->
-      <div class="space-y-4">
-        <h2 class="text-xl font-semibold tracking-tight">Sample Emails</h2>
-        <div class="rounded-lg border bg-card p-6 shadow-sm">
-          <div class="space-y-4">
+      <Collapsible.Root class="border rounded-lg">
+        <div class="border-b">
+          <Collapsible.Trigger class="flex w-full items-center justify-between p-4 hover:bg-muted/50">
+            <div class="flex items-center space-x-3">
+              <Mail class="size-5" />
+              <div>
+                <h2 class="text-lg font-semibold">Sample Emails</h2>
+                <p class="text-sm text-muted-foreground">Manage email templates and examples</p>
+              </div>
+            </div>
+            <ChevronRight class="size-4 transition-transform duration-200 data-[state=open]:rotate-90" />
+          </Collapsible.Trigger>
+        </div>
+        <Collapsible.Content>
+          <div class="p-4 space-y-4">
             <!-- Add Email Form -->
             <div class="flex gap-2">
               <input
@@ -736,14 +824,25 @@
               <p class="text-muted-foreground text-center py-4">No sample emails added yet.</p>
             {/if}
           </div>
-        </div>
-      </div>
+        </Collapsible.Content>
+      </Collapsible.Root>
 
       <!-- Correction Words Section -->
-      <div class="space-y-4">
-        <h2 class="text-xl font-semibold tracking-tight">Correction Words</h2>
-        <div class="rounded-lg border bg-card p-6 shadow-sm">
-          <div class="space-y-4">
+      <Collapsible.Root class="border rounded-lg">
+        <div class="border-b">
+          <Collapsible.Trigger class="flex w-full items-center justify-between p-4 hover:bg-muted/50">
+            <div class="flex items-center space-x-3">
+              <FileText class="size-5" />
+              <div>
+                <h2 class="text-lg font-semibold">Correction Words</h2>
+                <p class="text-sm text-muted-foreground">Manage word corrections and replacements</p>
+              </div>
+            </div>
+            <ChevronRight class="size-4 transition-transform duration-200 data-[state=open]:rotate-90" />
+          </Collapsible.Trigger>
+        </div>
+        <Collapsible.Content>
+          <div class="p-4 space-y-4">
             <!-- Add Word Form -->
             <div class="grid gap-4">
               <div>
@@ -798,8 +897,8 @@
               <p class="text-muted-foreground text-center py-4">No correction words added yet.</p>
             {/if}
           </div>
-        </div>
-      </div>
+        </Collapsible.Content>
+      </Collapsible.Root>
     </div>
   {/if}
 </div>

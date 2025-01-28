@@ -20,10 +20,15 @@
     website?: string;
     location?: string;
     size?: string;
-    recentActivity?: Array<{
-      type: 'note' | 'meeting' | 'transcript';
-      title: string;
-      date: string;
+    description?: string;
+    research_result?: Array<{
+      research_date: string;
+      research_content: string;
+      citations?: string[];
+    }>;
+    annual_report?: Array<{
+      year: string;
+      url: string;
     }>;
     prospects?: Array<{
       id: string;
@@ -33,7 +38,7 @@
       phone?: string;
       notes?: string;
     }>;
-    cold_email_drafts?: Array<{
+    cold_calling_guides?: Array<{
       id: string;
       prospect: {
         id: string;
@@ -43,7 +48,7 @@
       content: string;
       generated_at: string;
     }>;
-    cold_calling_guides?: Array<{
+    cold_email_drafts?: Array<{
       id: string;
       prospect: {
         id: string;
@@ -115,20 +120,20 @@
   };
 
   let { data } = $props();
-  let { company, notes: initialNotes, opportunities: initialOpportunities } = $derived(data as {
+  let { company: initialCompany, notes: initialNotes, opportunities: initialOpportunities } = $derived(data as {
     company: TargetCompany;
     notes: Note[];
     opportunities: Opportunity[];
   });
 
+  let company = $state<TargetCompany>(initialCompany);
   let notes = $state<Note[]>(initialNotes);
   let opportunities = $state<Opportunity[]>(initialOpportunities);
+  let error = $state<string | null>(null);
 
   $effect(() => {
+    company = initialCompany;
     notes = initialNotes;
-  });
-
-  $effect(() => {
     opportunities = initialOpportunities;
   });
 
@@ -169,6 +174,11 @@
   let selectedProspect = $state<Prospect | null>(null);
   let showProspectModal = $state(false);
 
+  // Add state variables for research functionality
+  let researchLoading = $state(false);
+  let showAnnualReportModal = $state(false);
+  let selectedProspectForGuides = $state<Prospect | null>(null);
+
   function formatDate(date: string) {
     return new Date(date).toLocaleString('en-US', {
       weekday: 'short',
@@ -195,7 +205,7 @@
     if (!notes) return [];
     notes.forEach(note => {
       if (note.tags) {
-        note.tags.forEach(tag => tagSet.add(tag));
+      note.tags.forEach(tag => tagSet.add(tag));
       }
     });
     return Array.from(tagSet);
@@ -393,18 +403,24 @@
     try {
       const updatedDrafts = company.cold_email_drafts?.filter(d => d.id !== draftId) || [];
       
-      const { error: updateError } = await data.supabase
+      const { data: updatedCompanyData, error: updateError } = await data.supabase
         .from('targetcompanies')
         .update({
           cold_email_drafts: updatedDrafts
         })
-        .eq('id', company.id);
+        .eq('id', company.id)
+        .select()
+        .single();
 
       if (updateError) throw updateError;
-      await invalidate('data');
+
+      if (updatedCompanyData) {
+        company = updatedCompanyData;
+        await invalidate('data');
+      }
     } catch (err) {
+      error = handleError(err);
       console.error('Error deleting email draft:', err);
-      alert('Failed to delete email draft. Please try again.');
     }
   }
 
@@ -414,19 +430,193 @@
     try {
       const updatedGuides = company.cold_calling_guides?.filter(g => g.id !== guideId) || [];
       
-      const { error: updateError } = await data.supabase
+      const { data: updatedCompanyData, error: updateError } = await data.supabase
         .from('targetcompanies')
         .update({
           cold_calling_guides: updatedGuides
         })
-        .eq('id', company.id);
+        .eq('id', company.id)
+        .select()
+        .single();
 
       if (updateError) throw updateError;
-      await invalidate('data');
+
+      if (updatedCompanyData) {
+        company = updatedCompanyData;
+        await invalidate('data');
+      }
     } catch (err) {
+      error = handleError(err);
       console.error('Error deleting call guide:', err);
-      alert('Failed to delete call guide. Please try again.');
     }
+  }
+
+  // Add functions for research functionality
+  async function handleAIResearch() {
+    if (!company?.name || !company?.website) {
+      error = "Company information is missing";
+      return;
+    }
+
+    researchLoading = true;
+    error = null;
+
+    try {
+      const response = await fetch(`/api/companies/${company.id}/research`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: company.name,
+          website: company.website,
+          description: company.description || ''
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate research');
+      }
+
+      const research = await response.json();
+      
+      if (!research.content) {
+        throw new Error('Unexpected response from AI service');
+      }
+
+      const newResearch = {
+        research_date: new Date().toISOString(),
+        research_content: research.content,
+        citations: research.citations || [],
+      };
+
+      const currentResearch = company.research_result || [];
+      const updatedResearch = [...currentResearch, newResearch];
+
+      const { data: updatedCompanyData, error: updateError } = await data.supabase
+        .from("targetcompanies")
+        .update({
+          research_result: updatedResearch,
+        })
+        .eq("id", company.id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+
+      if (updatedCompanyData) {
+        company = updatedCompanyData;
+        await invalidate('data');
+      }
+    } catch (err) {
+      error = handleError(err);
+      console.error("AI Research failed:", err);
+    } finally {
+      researchLoading = false;
+    }
+  }
+
+  async function handleAnnualReportDelete(report: TargetCompany['annual_report'][0]) {
+    if (!confirm("Are you sure you want to delete this annual report?")) return;
+
+    try {
+      const currentReports = company.annual_report || [];
+      const updatedReports = currentReports.filter(r => r.year !== report.year);
+
+      const { data: updatedCompanyData, error: updateError } = await data.supabase
+        .from("targetcompanies")
+        .update({
+          annual_report: updatedReports,
+        })
+        .eq("id", company.id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+
+      if (updatedCompanyData) {
+        company = updatedCompanyData;
+        await invalidate('data');
+      }
+    } catch (err) {
+      error = handleError(err);
+    }
+  }
+
+  async function handleAnnualReportSave(report: TargetCompany['annual_report'][0]) {
+    try {
+      const currentReports = company.annual_report || [];
+      
+      // Check if a report for this year already exists
+      if (currentReports.some(r => r.year === report.year)) {
+        error = `A report for year ${report.year} already exists`;
+        return;
+      }
+
+      const updatedReports = [...currentReports, report];
+
+      const { data: updatedCompanyData, error: updateError } = await data.supabase
+        .from("targetcompanies")
+        .update({
+          annual_report: updatedReports,
+        })
+        .eq("id", company.id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+
+      if (updatedCompanyData) {
+        company = updatedCompanyData;
+        showAnnualReportModal = false;
+        await invalidate('data');
+      }
+    } catch (err) {
+      error = handleError(err);
+    }
+  }
+
+  async function handleProspectSave(prospect: Omit<Prospect, 'id'>) {
+    try {
+      const currentProspects = company.prospects || [];
+      let updatedProspects;
+
+      if (selectedProspect) {
+        // Edit existing prospect
+        updatedProspects = currentProspects.map(p => 
+          p.id === selectedProspect.id ? { ...prospect, id: selectedProspect.id } : p
+        );
+      } else {
+        // Add new prospect
+        updatedProspects = [...currentProspects, { ...prospect, id: crypto.randomUUID() }];
+      }
+
+      const { data: updatedCompanyData, error: updateError } = await data.supabase
+        .from("targetcompanies")
+        .update({
+          prospects: updatedProspects,
+        })
+        .eq("id", company.id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+
+      if (updatedCompanyData) {
+        company = updatedCompanyData;
+        showProspectModal = false;
+        selectedProspect = null;
+        await invalidate('data');
+      }
+    } catch (err) {
+      error = handleError(err);
+      console.error("Error saving prospect:", err);
+    }
+  }
+
+  function handleError(err: any): string {
+    console.error(err);
+    return err.message || 'An unexpected error occurred';
   }
 </script>
 
@@ -529,85 +719,86 @@
     <!-- Main Content Area -->
     <div class="lg:col-span-2">
       <Tabs value={activeTab} onValueChange={(value) => activeTab = value}>
-        <TabsList class="grid w-full grid-cols-2">
+        <TabsList class="grid w-full grid-cols-3">
           <TabsTrigger value="notes">Notes</TabsTrigger>
           <TabsTrigger value="opportunities">Opportunities</TabsTrigger>
+          <TabsTrigger value="research">Research</TabsTrigger>
         </TabsList>
 
         <TabsContent value="notes">
-          <Card>
-            <CardHeader>
-              <div class="flex justify-between items-center">
-                <div>
-                  <CardTitle>Notes</CardTitle>
-                  <CardDescription>All notes related to {company.name}</CardDescription>
-                </div>
-                <Button onclick={() => showAddNote = true}>
-                  <Plus class="w-4 h-4 mr-2" />
-                  Add Note
-                </Button>
-              </div>
-              <div class="flex gap-2 mt-4 flex-wrap">
-                <Button 
-                  variant={activeTag === null ? "secondary" : "outline"}
-                  onclick={() => activeTag = null}
-                  size="sm"
-                >
-                  All
-                </Button>
-                {#each getAllTags() as tag}
-                  <Button 
-                    variant={activeTag === tag ? "secondary" : "outline"}
-                    onclick={() => activeTag = tag}
-                    size="sm"
-                  >
-                    {tag}
-                  </Button>
-                {/each}
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div class="space-y-6">
-                {#each getSortedNotes() as note}
-                  <div class="border-l-2 border-primary pl-4 py-2">
-                    <div class="flex justify-between items-start mb-2">
-                      <div>
-                        <div class="flex items-center gap-2">
-                          <h4 class="font-medium">{note.title}</h4>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            class="h-8 w-8 text-muted-foreground hover:text-destructive"
+      <Card>
+        <CardHeader>
+          <div class="flex justify-between items-center">
+            <div>
+              <CardTitle>Notes</CardTitle>
+              <CardDescription>All notes related to {company.name}</CardDescription>
+            </div>
+            <Button onclick={() => showAddNote = true}>
+              <Plus class="w-4 h-4 mr-2" />
+              Add Note
+            </Button>
+          </div>
+          <div class="flex gap-2 mt-4 flex-wrap">
+            <Button 
+              variant={activeTag === null ? "secondary" : "outline"}
+              onclick={() => activeTag = null}
+              size="sm"
+            >
+              All
+            </Button>
+            {#each getAllTags() as tag}
+              <Button 
+                variant={activeTag === tag ? "secondary" : "outline"}
+                onclick={() => activeTag = tag}
+                size="sm"
+              >
+                {tag}
+              </Button>
+            {/each}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div class="space-y-6">
+            {#each getSortedNotes() as note}
+              <div class="border-l-2 border-primary pl-4 py-2">
+                <div class="flex justify-between items-start mb-2">
+                  <div>
+                    <div class="flex items-center gap-2">
+                      <h4 class="font-medium">{note.title}</h4>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        class="h-8 w-8 text-muted-foreground hover:text-destructive"
                             onclick={() => showDeleteNote = { id: note.id, title: note.title }}
-                          >
-                            <Trash2 class="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <div class="flex gap-2 mt-1">
-                          <Badge variant="secondary">{note.type}</Badge>
-                          {#each note.tags as tag}
-                            <Badge variant="outline">{tag}</Badge>
-                          {/each}
-                        </div>
-                      </div>
-                      <span class="text-sm text-muted-foreground">{formatDate(note.created_at)}</span>
+                      >
+                        <Trash2 class="h-4 w-4" />
+                      </Button>
                     </div>
-                    <p class="text-muted-foreground whitespace-pre-line">{note.content}</p>
-                    {#if note.type === 'meeting' && note.metadata.attendees}
-                      <div class="mt-2 text-sm text-muted-foreground">
-                        <strong>Attendees:</strong> {note.metadata.attendees.join(', ')}
-                      </div>
-                    {/if}
+                    <div class="flex gap-2 mt-1">
+                      <Badge variant="secondary">{note.type}</Badge>
+                      {#each note.tags as tag}
+                        <Badge variant="outline">{tag}</Badge>
+                      {/each}
+                    </div>
                   </div>
-                {:else}
-                  <div class="text-center py-8">
-                    <MessageSquare class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                    <p class="text-muted-foreground">No notes yet. Click "Add Note" to create one.</p>
+                  <span class="text-sm text-muted-foreground">{formatDate(note.created_at)}</span>
+                </div>
+                <p class="text-muted-foreground whitespace-pre-line">{note.content}</p>
+                {#if note.type === 'meeting' && note.metadata.attendees}
+                  <div class="mt-2 text-sm text-muted-foreground">
+                    <strong>Attendees:</strong> {note.metadata.attendees.join(', ')}
                   </div>
-                {/each}
+                {/if}
               </div>
-            </CardContent>
-          </Card>
+            {:else}
+              <div class="text-center py-8">
+                <MessageSquare class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <p class="text-muted-foreground">No notes yet. Click "Add Note" to create one.</p>
+              </div>
+            {/each}
+          </div>
+        </CardContent>
+      </Card>
         </TabsContent>
 
         <TabsContent value="opportunities">
@@ -673,6 +864,198 @@
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="research">
+          <div class="grid gap-6">
+            <!-- AI Research Section -->
+            <Card>
+              <CardHeader>
+                <CardTitle>AI Research</CardTitle>
+                <CardDescription>AI-powered research and insights about {company.name}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {#if company.research_result && company.research_result.length > 0}
+                  <div class="space-y-4">
+                    {#each company.research_result as research}
+                      <div class="p-4 bg-muted rounded-lg">
+                        <div class="flex justify-between items-start mb-2">
+                          <h3 class="font-medium">Research Report</h3>
+                          <span class="text-sm text-muted-foreground">
+                            {formatDate(research.research_date)}
+                          </span>
+                        </div>
+                        <div class="prose prose-sm max-w-none">
+                          {@html marked(research.research_content.split('\n\nCitations:')[0])}
+                        </div>
+                        {#if research.citations?.length}
+                          <div class="mt-4 pt-4 border-t">
+                            <h4 class="text-sm font-medium mb-2">Citations</h4>
+                            <ol class="list-decimal list-inside space-y-1">
+                              {#each research.citations as citation}
+                                <li class="text-sm text-muted-foreground">
+                                  {@html citation.replace(/(https?:\/\/[^\s)]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-primary hover:text-primary/80">$1</a>')}
+                                </li>
+                              {/each}
+                            </ol>
+                          </div>
+                        {/if}
+                      </div>
+                    {/each}
+                  </div>
+                {:else}
+                  <div class="text-center py-8">
+                    <Search class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                    <p class="text-muted-foreground">No research available. Click "Generate Research" to start.</p>
+                  </div>
+                {/if}
+                <Button
+                  onclick={handleAIResearch}
+                  variant="outline"
+                  disabled={researchLoading}
+                  class="w-full mt-4"
+                >
+                  {#if researchLoading}
+                    <div class="animate-spin rounded-full h-4 w-4 border-2 border-muted border-t-foreground mr-2"></div>
+                  {/if}
+                  {researchLoading ? 'Researching...' : 'Generate Research'}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <!-- Annual Reports Section -->
+            <Card>
+              <CardHeader>
+                <div class="flex justify-between items-center">
+                  <div>
+                    <CardTitle>Annual Reports</CardTitle>
+                    <CardDescription>Track and analyze annual reports</CardDescription>
+                  </div>
+                  <Button onclick={() => showAnnualReportModal = true}>
+                    <Plus class="w-4 h-4 mr-2" />
+                    Add Report
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {#if company.annual_report && company.annual_report.length > 0}
+                  <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {#each company.annual_report as report}
+                      <Card>
+                        <CardContent class="pt-6">
+                          <h3 class="font-semibold">Year {report.year}</h3>
+                          <a 
+                            href={report.url} 
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="text-primary hover:text-primary/80"
+                          >
+                            View Report
+                          </a>
+                          <div class="flex gap-2 mt-4">
+                            <Button 
+                              variant="destructive" 
+                              size="sm"
+                              onclick={() => handleAnnualReportDelete(report)}
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    {/each}
+                  </div>
+                {:else}
+                  <div class="text-center py-8">
+                    <FileText class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                    <p class="text-muted-foreground">No annual reports added yet.</p>
+                  </div>
+                {/if}
+              </CardContent>
+            </Card>
+
+            <!-- Prospects Section -->
+            <Card>
+              <CardHeader>
+                <div class="flex justify-between items-center">
+                  <div>
+                    <CardTitle>Prospects</CardTitle>
+                    <CardDescription>Manage key contacts at {company.name}</CardDescription>
+                  </div>
+                  <Button onclick={() => { selectedProspect = null; showProspectModal = true; }}>
+                    <Plus class="w-4 h-4 mr-2" />
+                    Add Prospect
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {#if company.prospects && company.prospects.length > 0}
+                  <div class="border rounded-lg overflow-hidden">
+                    <table class="w-full">
+                      <thead>
+                        <tr class="bg-muted">
+                          <th class="px-4 py-3 text-left">Name</th>
+                          <th class="px-4 py-3 text-left">Title</th>
+                          <th class="px-4 py-3 text-left">Email</th>
+                          <th class="px-4 py-3 text-left">Phone</th>
+                          <th class="px-4 py-3 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {#each company.prospects as prospect}
+                          <tr class="border-t hover:bg-muted/50">
+                            <td class="px-4 py-3">{prospect.name}</td>
+                            <td class="px-4 py-3 text-muted-foreground">{prospect.title}</td>
+                            <td class="px-4 py-3">
+                              {#if prospect.email}
+                                <a href="mailto:{prospect.email}" class="text-primary hover:text-primary/80">
+                                  {prospect.email}
+                                </a>
+                              {:else}
+                                <span class="text-muted-foreground">N/A</span>
+                              {/if}
+                            </td>
+                            <td class="px-4 py-3">
+                              {#if prospect.phone}
+                                <a href="tel:{prospect.phone}" class="text-primary hover:text-primary/80">
+                                  {prospect.phone}
+                                </a>
+                              {:else}
+                                <span class="text-muted-foreground">N/A</span>
+                              {/if}
+                            </td>
+                            <td class="px-4 py-3 text-right">
+                              <div class="flex justify-end gap-2">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onclick={() => handleProspectEdit(prospect)}
+                                >
+                                  Edit
+                                </Button>
+                                <Button 
+                                  variant="destructive" 
+                                  size="sm"
+                                  onclick={() => handleProspectDelete(prospect)}
+                                >
+                                  Delete
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        {/each}
+                      </tbody>
+                    </table>
+                  </div>
+                {:else}
+                  <div class="text-center py-8">
+                    <Users class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                    <p class="text-muted-foreground">No prospects added yet.</p>
+                  </div>
+                {/if}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
     </div>
@@ -1200,6 +1583,135 @@
           </div>
         {/if}
       </div>
+    </DialogContent>
+  </Dialog>
+
+  <!-- Prospect Modal -->
+  <Dialog bind:open={showProspectModal}>
+    <DialogContent>
+      <form onsubmit={(e) => {
+        e.preventDefault();
+        const formData = new FormData(e.currentTarget);
+        const prospect = {
+          name: formData.get('name') as string,
+          title: formData.get('title') as string,
+          email: formData.get('email') as string || undefined,
+          phone: formData.get('phone') as string || undefined,
+          notes: formData.get('notes') as string || undefined
+        };
+        handleProspectSave(prospect);
+      }}>
+        <DialogHeader>
+          <DialogTitle>{selectedProspect ? 'Edit' : 'Add'} Prospect</DialogTitle>
+          <DialogDescription>
+            {selectedProspect ? 'Edit prospect details' : 'Add a new prospect to'} {company.name}
+          </DialogDescription>
+        </DialogHeader>
+        <div class="grid gap-4 py-4">
+          <div class="grid gap-2">
+            <Label for="name">Name</Label>
+            <Input 
+              id="name" 
+              name="name" 
+              value={selectedProspect?.name || ''} 
+              required 
+            />
+          </div>
+          <div class="grid gap-2">
+            <Label for="title">Title</Label>
+            <Input 
+              id="title" 
+              name="title" 
+              value={selectedProspect?.title || ''} 
+              required 
+            />
+          </div>
+          <div class="grid gap-2">
+            <Label for="email">Email</Label>
+            <Input 
+              id="email" 
+              name="email" 
+              type="email" 
+              value={selectedProspect?.email || ''} 
+            />
+          </div>
+          <div class="grid gap-2">
+            <Label for="phone">Phone</Label>
+            <Input 
+              id="phone" 
+              name="phone" 
+              type="tel" 
+              value={selectedProspect?.phone || ''} 
+            />
+          </div>
+          <div class="grid gap-2">
+            <Label for="notes">Notes</Label>
+            <Textarea 
+              id="notes" 
+              name="notes" 
+              value={selectedProspect?.notes || ''} 
+              rows={3} 
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onclick={() => showProspectModal = false}>
+            Cancel
+          </Button>
+          <Button type="submit">Save</Button>
+        </DialogFooter>
+      </form>
+    </DialogContent>
+  </Dialog>
+
+  <!-- Annual Report Modal -->
+  <Dialog bind:open={showAnnualReportModal}>
+    <DialogContent>
+      <form onsubmit={(e) => {
+        e.preventDefault();
+        const formData = new FormData(e.currentTarget);
+        const report = {
+          year: formData.get('year') as string,
+          url: formData.get('url') as string
+        };
+        handleAnnualReportSave(report);
+      }}>
+        <DialogHeader>
+          <DialogTitle>Add Annual Report</DialogTitle>
+          <DialogDescription>
+            Add a new annual report for {company.name}
+          </DialogDescription>
+        </DialogHeader>
+        <div class="grid gap-4 py-4">
+          <div class="grid gap-2">
+            <Label for="year">Year</Label>
+            <Input 
+              id="year" 
+              name="year" 
+              type="number" 
+              min="1900" 
+              max={new Date().getFullYear()} 
+              required 
+            />
+          </div>
+          <div class="grid gap-2">
+            <Label for="url">URL</Label>
+            <Input 
+              id="url" 
+              name="url" 
+              type="url" 
+              placeholder="https://" 
+              required 
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onclick={() => showAnnualReportModal = false}>
+            Cancel
+          </Button>
+          <Button type="submit">Save</Button>
+        </DialogFooter>
+      </form>
     </DialogContent>
   </Dialog>
 </div> 
