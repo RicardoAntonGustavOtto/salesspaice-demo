@@ -37,6 +37,11 @@
 			url: "/private/targetcompanyresearch",
 			icon: Building2,
 		},
+		{
+			title: "Events",
+			url: "/private/events",
+			icon: Calendar,
+		},
 	];
 
 	const navSecondary = [
