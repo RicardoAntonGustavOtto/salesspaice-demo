@@ -22,20 +22,72 @@ export const actions: Actions = {
         form,
       });
     }
-    console.log(form.data);
 
     // Create user in Supabase
     const supabase = event.locals.supabase;
-    const { email, password } = form.data;
-    const { error } = await supabase.auth.signUp({
-      email: form.data.username,
-      password: form.data.password,
-    });
-    if (error) {
-      console.log(error);
-      return setError(form, "password", "This account already exists");
-    } else {
-      return redirect(303, "/");
+    const { username, password, companyId, newCompanyName } = form.data;
+    
+    try {
+      // Create the user account
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: username,
+        password: password,
+      });
+      
+      if (authError) {
+        console.error("Auth error:", authError);
+        return setError(form, "username", "This account already exists");
+      }
+
+      const userId = authData.user?.id;
+      if (!userId) {
+        throw new Error("User creation failed");
+      }
+
+      // Handle company association
+      if (companyId) {
+        // Update existing company with new user
+        const { error: updateError } = await supabase
+          .from("owncompany")
+          .update({ user_id: userId })
+          .eq("id", companyId);
+
+        if (updateError) {
+          console.error("Error updating company:", updateError);
+          return setError(form, "companyId", "Failed to associate with company");
+        }
+      } else if (newCompanyName && newCompanyName.trim()) {
+        // Create new company for user
+        const { error: createError } = await supabase
+          .from("owncompany")
+          .insert([
+            {
+              user_id: userId,
+              name: newCompanyName.trim(),
+              description: `Welcome to ${newCompanyName.trim()}! You can edit your company details in the settings.`,
+              products: [],
+              competitor_knowledge: [],
+              sample_emails: [],
+              correction_words: []
+            },
+          ]);
+
+        if (createError) {
+          console.error("Error creating company:", createError);
+          return setError(form, "newCompanyName", "Failed to create company");
+        }
+      }
+
+      // If we get here, everything succeeded
+      throw redirect(303, "/login?registered=true");
+
+    } catch (err) {
+      if (err instanceof Error) {
+        console.error("Registration error:", err);
+        return setError(form, "username", "Registration failed. Please try again.");
+      }
+      // If it's a redirect, throw it
+      throw err;
     }
   },
 };
