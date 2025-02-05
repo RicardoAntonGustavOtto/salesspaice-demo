@@ -38,7 +38,7 @@
 			icon: Building2,
 		},
 		{
-			title: "Events",
+			title: "EventSpaice",
 			url: "/private/events",
 			icon: Calendar,
 		},
