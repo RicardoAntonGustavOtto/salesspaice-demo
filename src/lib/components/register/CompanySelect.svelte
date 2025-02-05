@@ -47,16 +47,16 @@
     formData.companyId = company.id;
     formData.newCompanyName = "";
     showNewCompanyInput = false;
-    searchQuery = company.name;
+    searchQuery = company.name; // Update search query to show selected company
   }
 
   function toggleNewCompany() {
     showNewCompanyInput = !showNewCompanyInput;
     if (showNewCompanyInput) {
       formData.companyId = "";
-      searchQuery = "";
+      searchQuery = ""; // Clear search when switching to new company
     } else {
-      searchQuery = "";
+      formData.newCompanyName = "";
     }
   }
 </script>

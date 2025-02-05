@@ -2,6 +2,7 @@
   import { Card, CardHeader, CardContent } from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import { Search } from "lucide-svelte";
+  import { fade } from "svelte/transition";
   import type { PageData } from "./$types";
 
   interface TargetCompany {
@@ -12,23 +13,76 @@
     notesCount: number;
     meetingsCount: number;
     lastActivity: string;
+    website?: string;
   }
 
-  let { data } = $props<PageData>();
+  let { data } = $props<{ data: PageData }>();
   let searchQuery = $state("");
+  let showAddModal = $state(false);
+  let isLoading = $state(false);
+  let error = $state<string | null>(null);
+  let localCompanies = $state<TargetCompany[]>(data.companies ?? []);
   
-  let companies = $derived<TargetCompany[]>(data.companies ?? []);
+  let newCompany = $state({
+    name: "",
+    website: ""
+  });
+  
+  let companies = $derived(localCompanies);
   let filteredCompanies = $derived(
     companies.filter(company => 
       company.name.toLowerCase().includes(searchQuery.toLowerCase())
     )
   );
+
+  async function addCompany() {
+    if (newCompany.name && newCompany.website) {
+      try {
+        error = null;
+        isLoading = true;
+
+        const { data: { user } } = await data.supabase.auth.getUser();
+        if (!user?.id) throw new Error("No user logged in");
+
+        const { data: newData, error: err } = await data.supabase
+          .from("targetcompanies")
+          .insert([
+            {
+              user_id: user.id,
+              name: newCompany.name,
+              website: newCompany.website
+            },
+          ])
+          .select()
+          .single();
+
+        if (err) throw err;
+
+        localCompanies = [...localCompanies, newData];
+        closeModal();
+      } catch (err) {
+        console.error("Error adding company:", err);
+        error = err instanceof Error ? err.message : "An error occurred";
+      } finally {
+        isLoading = false;
+      }
+    }
+  }
+
+  function closeModal() {
+    showAddModal = false;
+    newCompany = {
+      name: "",
+      website: ""
+    };
+    error = null;
+  }
 </script>
 
 <div class="container mx-auto p-6 space-y-6">
   <div class="flex justify-between items-center">
     <h1 class="text-3xl font-bold">Target Companies</h1>
-    <Button variant="outline">Add Company</Button>
+    <Button variant="outline" onclick={() => showAddModal = true}>Add Company</Button>
   </div>
 
   <div class="relative">
@@ -76,4 +130,58 @@
       </a>
     {/each}
   </div>
-</div> 
+</div>
+
+<!-- Add Company Modal -->
+{#if showAddModal}
+  <div
+    class="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center"
+    transition:fade
+    on:click|self={closeModal}
+  >
+    <div
+      class="bg-card p-6 rounded-lg w-full max-w-md mx-4 shadow-lg"
+      on:click|stopPropagation
+    >
+      <h2 class="text-xl font-semibold tracking-tight mb-4">Add New Target Company</h2>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium mb-1" for="companyName">Company Name</label>
+          <input
+            type="text"
+            id="companyName"
+            bind:value={newCompany.name}
+            class="w-full px-3 py-2 rounded-lg bg-background border border-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1" for="companyWebsite">Company Website</label>
+          <input
+            type="text"
+            id="companyWebsite"
+            bind:value={newCompany.website}
+            class="w-full px-3 py-2 rounded-lg bg-background border border-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+        {#if error}
+          <div class="text-sm text-destructive">{error}</div>
+        {/if}
+        <div class="flex gap-3 mt-6">
+          <button
+            on:click={addCompany}
+            disabled={isLoading}
+            class="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+          >
+            {isLoading ? '↻' : 'Add Company'}
+          </button>
+          <button
+            on:click={closeModal}
+            class="flex-1 px-4 py-2 border border-input bg-background text-foreground rounded-lg hover:bg-accent transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+{/if} 

@@ -25,18 +25,29 @@ export const actions: Actions = {
 
     // Create user in Supabase
     const supabase = event.locals.supabase;
-    const { username, password, companyId, newCompanyName } = form.data;
+    const { username, password, confirmPassword, companyId, newCompanyName } = form.data;
     
+    // Double check password match (although schema should catch this)
+    if (password !== confirmPassword) {
+      return setError(form, "confirmPassword", "Passwords don't match");
+    }
+
     try {
       // Create the user account
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: username,
         password: password,
+        options: {
+          emailRedirectTo: `${event.url.origin}/auth/callback`
+        }
       });
       
       if (authError) {
         console.error("Auth error:", authError);
-        return setError(form, "username", "This account already exists");
+        if (authError.message.includes("already registered")) {
+          return setError(form, "username", "This email is already registered");
+        }
+        return setError(form, "username", authError.message);
       }
 
       const userId = authData.user?.id;
@@ -56,19 +67,16 @@ export const actions: Actions = {
           console.error("Error updating company:", updateError);
           return setError(form, "companyId", "Failed to associate with company");
         }
-      } else if (newCompanyName && newCompanyName.trim()) {
+      } else if (newCompanyName) {
         // Create new company for user
         const { error: createError } = await supabase
           .from("owncompany")
           .insert([
             {
               user_id: userId,
-              name: newCompanyName.trim(),
-              description: `Welcome to ${newCompanyName.trim()}! You can edit your company details in the settings.`,
+              name: newCompanyName,
+              description: "Your company description goes here...",
               products: [],
-              competitor_knowledge: [],
-              sample_emails: [],
-              correction_words: []
             },
           ]);
 
