@@ -12,6 +12,11 @@
   import type { PageData } from "./$types";
   import * as Select from "$lib/components/ui/select";
   import { marked } from "marked";
+  import ResearchList from "$lib/components/research/ResearchList.svelte";
+  import ResearchModal from "$lib/components/research/ResearchModal.svelte";
+  import { callProxy } from "$lib/services/apiService";
+  import { ownCompany } from "$lib/stores/ownCompany";
+  import { getPrompt } from "$lib/services/promptManager";
 
   interface TargetCompany {
     id: string;
@@ -119,6 +124,17 @@
     notes?: string;
   };
 
+  interface AIResponse {
+    choices: Array<{
+      message: {
+        content: string;
+      };
+    }>;
+    citations?: string[];
+  }
+
+  type ModelProvider = import("$lib/services/apiService").ModelProvider;
+
   let { data } = $props();
   let { company: initialCompany, notes: initialNotes, opportunities: initialOpportunities } = $derived(data as {
     company: TargetCompany;
@@ -179,6 +195,29 @@
   let showAnnualReportModal = $state(false);
   let selectedProspectForGuides = $state<Prospect | null>(null);
 
+  // Add these new state variables
+  let showResearchModal = $state(false);
+  let researchResult = $state("");
+  let selectedResearchIndex: number | null = $state(null);
+  let editedContent = $state("");
+  let show = $state(false);
+
+  // Add this with the other state variables near the top of the script
+  let loading = $state(false);
+
+  // First, add a new tabs state variable for the research section
+  let researchActiveTab = $state('research');
+
+  // Update tabs array
+  const tabs = [
+    { id: 'notes', label: 'Notes' },
+    { id: 'opportunities', label: 'Opportunities' }
+  ] as const;
+
+  // Add this with the other state variables
+  let searchQuery = $state('');
+
+  // Helper functions - place these after the state declarations and before the handlers
   function formatDate(date: string) {
     return new Date(date).toLocaleString('en-US', {
       weekday: 'short',
@@ -187,6 +226,16 @@
       hour: 'numeric',
       minute: '2-digit'
     });
+  }
+
+  function getProspectGuidesCount(prospectId: string): number {
+    if (!company?.cold_calling_guides) return 0;
+    return company.cold_calling_guides.filter(d => d?.prospect?.id === prospectId).length;
+  }
+
+  function getProspectDraftsCount(prospectId: string): number {
+    if (!company?.cold_email_drafts) return 0;
+    return company.cold_email_drafts.filter(d => d?.prospect?.id === prospectId).length;
   }
 
   function getSortedNotes() {
@@ -198,136 +247,6 @@
     return filteredNotes.sort((a, b) => 
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
-  }
-
-  function getAllTags() {
-    const tagSet = new Set<string>();
-    if (!notes) return [];
-    notes.forEach(note => {
-      if (note.tags) {
-      note.tags.forEach(tag => tagSet.add(tag));
-      }
-    });
-    return Array.from(tagSet);
-  }
-
-  async function handleAddNote(event: SubmitEvent) {
-    event.preventDefault();
-    const form = event.target as HTMLFormElement;
-    const formData = new FormData(form);
-
-    const newNote = {
-      title: formData.get('title') as string,
-      content: formData.get('content') as string,
-      type: noteType,
-      tags: noteTags || [],
-      metadata: noteMetadata || {},
-      target_company_id: company.id,
-      created_at: new Date().toISOString(),
-      created_by: 'current_user'
-    };
-
-    const response = await fetch(`/api/companies/${company.id}/notes`, {
-      method: 'POST',
-      body: JSON.stringify(newNote),
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
-
-    if (response.ok) {
-      const savedNote = await response.json();
-      // Ensure the note has all required fields before adding to local state
-      const completeNote: Note = {
-        id: savedNote.id,
-        title: savedNote.title,
-        content: savedNote.content,
-        type: savedNote.type,
-        tags: savedNote.tags || [],
-        metadata: savedNote.metadata || {},
-        created_at: savedNote.created_at,
-        created_by: savedNote.created_by
-      };
-      notes = [completeNote, ...notes];
-      showAddNote = false;
-      // Reset form
-      noteTitle = "";
-      noteContent = "";
-      noteType = 'general';
-      noteTags = [];
-      noteMetadata = {};
-      await invalidate('data');
-    }
-  }
-
-  async function handleDeleteNote(noteId: string) {
-    const response = await fetch(`/api/companies/${company.id}/notes?noteId=${noteId}`, {
-      method: 'DELETE'
-    });
-
-    if (response.ok) {
-      notes = notes.filter(note => note.id !== noteId);
-      await invalidate('data');
-    }
-  }
-
-  // Opportunity Management Functions
-  async function handleAddOpportunity(event: SubmitEvent) {
-    event.preventDefault();
-    const form = event.target as HTMLFormElement;
-
-    const newOpportunity = {
-      name: opportunityName,
-      target_customer_id: company.id,
-      description: opportunityDescription,
-      close_date: opportunityCloseDate || null,
-      stage: opportunityStage,
-      type: opportunityType,
-      probability: opportunityProbability,
-      currency: opportunityCurrency,
-      amount: opportunityAmount,
-      next_step: opportunityNextStep || null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
-    const response = await fetch(`/api/companies/${company.id}/opportunities`, {
-      method: 'POST',
-      body: JSON.stringify(newOpportunity),
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
-
-    if (response.ok) {
-      const savedOpportunity = await response.json();
-      opportunities = [savedOpportunity, ...opportunities];
-      showAddOpportunity = false;
-      // Reset form
-      opportunityName = "";
-      opportunityDescription = "";
-      opportunityCloseDate = "";
-      opportunityStage = 'Prospecting';
-      opportunityType = 'New Business';
-      opportunityProbability = 0;
-      opportunityCurrency = 'USD';
-      opportunityAmount = 0;
-      opportunityNextStep = "";
-      await invalidate('data');
-    }
-  }
-
-  async function handleDeleteOpportunity(opportunityId: string) {
-    if (!opportunityId) return;
-    
-    const response = await fetch(`/api/companies/${company.id}/opportunities?opportunityId=${opportunityId}`, {
-      method: 'DELETE'
-    });
-
-    if (response.ok) {
-      opportunities = opportunities.filter(opp => opp.id !== opportunityId);
-      await invalidate('data');
-    }
   }
 
   function getSortedOpportunities() {
@@ -462,38 +381,31 @@
     error = null;
 
     try {
-      const response = await fetch(`/api/companies/${company.id}/research`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          name: company.name,
-          website: company.website,
-          description: company.description || ''
-        })
+      const { prompt, model, provider } = getPrompt("research_targetcompany", {
+        targetcompany_name: company.name,
+        targetcompany_website: company.website,
+        targetcompany_description: company.description || '',
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to generate research');
-      }
-
-      const research = await response.json();
+      const response = await callProxy(prompt, provider as ModelProvider, model);
+      const research = typeof response === 'string' ? { choices: [{ message: { content: response } }] } : response as unknown as AIResponse;
       
-      if (!research.content) {
+      if (!research.choices?.[0]?.message?.content) {
         throw new Error('Unexpected response from AI service');
       }
 
+      const researchContent = research.choices[0].message.content;
+
       const newResearch = {
         research_date: new Date().toISOString(),
-        research_content: research.content,
+        research_content: researchContent,
         citations: research.citations || [],
       };
 
       const currentResearch = company.research_result || [];
       const updatedResearch = [...currentResearch, newResearch];
 
-      const { data: updatedCompanyData, error: updateError } = await data.supabase
+      const { data: updatedCompany, error: updateError } = await data.supabase
         .from("targetcompanies")
         .update({
           research_result: updatedResearch,
@@ -504,10 +416,9 @@
 
       if (updateError) throw updateError;
 
-      if (updatedCompanyData) {
-        company = updatedCompanyData;
-        await invalidate('data');
-      }
+      company = updatedCompany;
+      researchResult = researchContent;
+      editedContent = researchContent;
     } catch (err) {
       error = handleError(err);
       console.error("AI Research failed:", err);
@@ -578,16 +489,16 @@
 
   async function handleProspectSave(prospect: Omit<Prospect, 'id'>) {
     try {
+      loading = true;
+      error = null;
       const currentProspects = company.prospects || [];
       let updatedProspects;
 
       if (selectedProspect) {
-        // Edit existing prospect
         updatedProspects = currentProspects.map(p => 
           p.id === selectedProspect.id ? { ...prospect, id: selectedProspect.id } : p
         );
       } else {
-        // Add new prospect
         updatedProspects = [...currentProspects, { ...prospect, id: crypto.randomUUID() }];
       }
 
@@ -611,12 +522,369 @@
     } catch (err) {
       error = handleError(err);
       console.error("Error saving prospect:", err);
+    } finally {
+      loading = false;
     }
   }
 
   function handleError(err: any): string {
     console.error(err);
     return err.message || 'An unexpected error occurred';
+  }
+
+  // Add research handlers
+  async function handleResearchView({ detail }: CustomEvent<{ research: ResearchResult, index: number }>) {
+    showResearchModal = true;
+    editedContent = detail.research.research_content;
+    selectedResearchIndex = detail.index;
+  }
+
+  async function handleResearchDelete({ detail }: CustomEvent<{ index: number }>) {
+    if (!confirm("Are you sure you want to delete this research?")) return;
+
+    try {
+      const currentResearch = company.research_result || [];
+      const updatedResearch = [...currentResearch];
+      updatedResearch.splice(detail.index, 1);
+
+      const { data: updatedCompany, error: updateError } = await data.supabase
+        .from("targetcompanies")
+        .update({
+          research_result: updatedResearch,
+        })
+        .eq("id", company.id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+
+      company = updatedCompany;
+    } catch (err) {
+      error = handleError(err);
+    }
+  }
+
+  async function handleResearchSave({ detail }: CustomEvent<{ content: string }>) {
+    if (!company || !detail.content || selectedResearchIndex === null) return;
+
+    try {
+      loading = true;
+      error = null;
+
+      const currentResearch = company.research_result || [];
+      const updatedResearch = [...currentResearch];
+      updatedResearch[selectedResearchIndex] = {
+        ...updatedResearch[selectedResearchIndex],
+        research_content: detail.content,
+        research_date: new Date().toISOString(),
+      };
+
+      const { data: updatedCompany, error: updateError } = await data.supabase
+        .from("targetcompanies")
+        .update({
+          research_result: updatedResearch,
+        })
+        .eq("id", company.id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+
+      company = updatedCompany;
+      showResearchModal = false;
+    } catch (err) {
+      error = handleError(err);
+    } finally {
+      loading = false;
+    }
+  }
+
+  $effect(() => {
+    show = showResearchModal;
+  });
+
+  // Add these functions to handle the generation
+  async function handleGenerateColdCallingGuide() {
+    if (!company?.name || !company?.website || !selectedProspect) {
+      error = "Company information or prospect is missing";
+      return;
+    }
+
+    try {
+      loading = true;
+      error = null;
+
+      // Get the selected research
+      const latestResearch = company.research_result?.[company.research_result.length - 1];
+      if (!latestResearch) {
+        throw new Error("No research results found. Please generate research first.");
+      }
+
+      // Create the variables object with all required fields
+      const promptVariables = {
+        prospect_name: selectedProspect.name,
+        targetcompany_name: company.name,
+        targetcompany_website: company.website,
+        owncompany_name: $ownCompany.name,
+        owncompany_info: $ownCompany.info,
+        targetcompany_research_result: latestResearch.research_content,
+        prospect_info: `Name: ${selectedProspect.name}
+Title: ${selectedProspect.title}
+Email: ${selectedProspect.email || 'N/A'}
+Phone: ${selectedProspect.phone || 'N/A'}
+Notes: ${selectedProspect.notes || 'N/A'}`
+      };
+
+      const { prompt, model, provider } = getPrompt("prospecting_email", promptVariables);
+      const response = await callProxy(prompt, provider as ModelProvider, model);
+      const guideContent = typeof response === 'string' ? response : (response as unknown as AIResponse).choices?.[0]?.message?.content;
+
+      if (!guideContent) {
+        throw new Error('Failed to generate guide content');
+      }
+
+      const guide = {
+        id: crypto.randomUUID(),
+        prospect: selectedProspect,
+        content: guideContent,
+        generated_at: new Date().toISOString(),
+      };
+
+      const { data: updatedCompany, error: updateError } = await data.supabase
+        .from("targetcompanies")
+        .update({
+          cold_calling_guides: [...(company.cold_calling_guides || []), guide],
+        })
+        .eq("id", company.id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+
+      company = updatedCompany;
+      showColdCallingModal = true;
+      selectedProspectForGuides = selectedProspect;
+    } catch (err) {
+      error = handleError(err);
+      console.error("Cold calling guide generation failed:", err);
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function handleGenerateEmailDraft(prospect: Prospect) {
+    if (!company?.name || !company?.website) {
+      error = "Company information is missing";
+      return;
+    }
+
+    try {
+      loading = true;
+      error = null;
+
+      // Create the variables object with all required fields
+      const promptVariables = {
+        prospect_name: prospect.name,
+        targetcompany_name: company.name,
+        targetcompany_website: company.website,
+        targetcompany_description: company.description || '',
+        targetcompany_annualreport: selectedEmailReport || "",
+        targetcompany_research: selectedEmailResearch?.research_content || "",
+        targetcompany_coldcallingguide: selectedEmailGuide?.content || "",
+        prospect_info: `Name: ${prospect.name}
+Title: ${prospect.title}
+Email: ${prospect.email}
+Phone: ${prospect.phone}
+Notes: ${prospect.notes}`,
+        owncompany_name: $ownCompany.name
+      };
+
+      const { prompt, model, provider } = getPrompt("prospecting_email", promptVariables);
+      const response = await callProxy(prompt, provider as ModelProvider, model);
+      const emailContent = typeof response === 'string' ? response : (response as unknown as AIResponse).choices?.[0]?.message?.content;
+
+      if (!emailContent) {
+        throw new Error('Failed to generate email content');
+      }
+
+      const draft = {
+        id: crypto.randomUUID(),
+        prospect,
+        content: emailContent,
+        generated_at: new Date().toISOString()
+      };
+
+      const { data: updatedCompany, error: updateError } = await data.supabase
+        .from("targetcompanies")
+        .update({
+          cold_email_drafts: [...(company.cold_email_drafts || []), draft],
+        })
+        .eq("id", company.id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+
+      if (updatedCompany) {
+        company = updatedCompany;
+      }
+    } catch (err) {
+      error = "Failed to generate email draft. Please try again.";
+      console.error("Email draft generation failed:", err);
+    } finally {
+      loading = false;
+    }
+  }
+
+  // Add these helper functions near the other utility functions
+  function getAllTags() {
+    const tagSet = new Set<string>();
+    if (!notes) return [];
+    notes.forEach(note => {
+      if (note.tags) {
+        note.tags.forEach(tag => tagSet.add(tag));
+      }
+    });
+    return Array.from(tagSet);
+  }
+
+  async function handleAddNote(event: SubmitEvent) {
+    event.preventDefault();
+    const form = event.target as HTMLFormElement;
+    const formData = new FormData(form);
+
+    const newNote = {
+      title: formData.get('title') as string,
+      content: formData.get('content') as string,
+      type: noteType,
+      tags: noteTags || [],
+      metadata: noteMetadata || {},
+      target_company_id: company.id,
+      created_at: new Date().toISOString(),
+      created_by: 'current_user'
+    };
+
+    const response = await fetch(`/api/companies/${company.id}/notes`, {
+      method: 'POST',
+      body: JSON.stringify(newNote),
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (response.ok) {
+      const savedNote = await response.json();
+      // Ensure the note has all required fields before adding to local state
+      const completeNote: Note = {
+        id: savedNote.id,
+        title: savedNote.title,
+        content: savedNote.content,
+        type: savedNote.type,
+        tags: savedNote.tags || [],
+        metadata: savedNote.metadata || {},
+        created_at: savedNote.created_at,
+        created_by: savedNote.created_by
+      };
+      notes = [completeNote, ...notes];
+      showAddNote = false;
+      // Reset form
+      noteTitle = "";
+      noteContent = "";
+      noteType = 'general';
+      noteTags = [];
+      noteMetadata = {};
+      await invalidate('data');
+    }
+  }
+
+  async function handleDeleteNote(noteId: string) {
+    const response = await fetch(`/api/companies/${company.id}/notes?noteId=${noteId}`, {
+      method: 'DELETE'
+    });
+
+    if (response.ok) {
+      notes = notes.filter(note => note.id !== noteId);
+      await invalidate('data');
+    }
+  }
+
+  // Opportunity Management Functions
+  async function handleAddOpportunity(event: SubmitEvent) {
+    event.preventDefault();
+    const form = event.target as HTMLFormElement;
+
+    const newOpportunity = {
+      name: opportunityName,
+      target_customer_id: company.id,
+      description: opportunityDescription,
+      close_date: opportunityCloseDate || null,
+      stage: opportunityStage,
+      type: opportunityType,
+      probability: opportunityProbability,
+      currency: opportunityCurrency,
+      amount: opportunityAmount,
+      next_step: opportunityNextStep || null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    const response = await fetch(`/api/companies/${company.id}/opportunities`, {
+      method: 'POST',
+      body: JSON.stringify(newOpportunity),
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (response.ok) {
+      const savedOpportunity = await response.json();
+      opportunities = [savedOpportunity, ...opportunities];
+      showAddOpportunity = false;
+      // Reset form
+      opportunityName = "";
+      opportunityDescription = "";
+      opportunityCloseDate = "";
+      opportunityStage = 'Prospecting';
+      opportunityType = 'New Business';
+      opportunityProbability = 0;
+      opportunityCurrency = 'USD';
+      opportunityAmount = 0;
+      opportunityNextStep = "";
+      await invalidate('data');
+    }
+  }
+
+  async function handleDeleteOpportunity(opportunityId: string) {
+    if (!opportunityId) return;
+    
+    const response = await fetch(`/api/companies/${company.id}/opportunities?opportunityId=${opportunityId}`, {
+      method: 'DELETE'
+    });
+
+    if (response.ok) {
+      opportunities = opportunities.filter(opp => opp.id !== opportunityId);
+      await invalidate('data');
+    }
+  }
+
+  // Add these missing state variables
+  let showColdCallingModal = $state(false);
+  let showEmailDraftsModal = $state(false);
+  let selectedEmailResearch = $state<ResearchResult | null>(null);
+  let selectedEmailReport = $state<string | null>(null);
+  let selectedEmailGuide = $state<ColdCallingGuide | null>(null);
+
+  let coldCallingSearchQuery = $state('');
+  let emailDraftsSearchQuery = $state('');
+
+  function closeColdCallingModal() {
+    showColdCallingModal = false;
+    selectedProspectForGuides = null;
+  }
+
+  function closeEmailDraftsModal() {
+    showEmailDraftsModal = false;
+    selectedProspectForDrafts = null;
   }
 </script>
 
@@ -719,86 +987,85 @@
     <!-- Main Content Area -->
     <div class="lg:col-span-2">
       <Tabs value={activeTab} onValueChange={(value) => activeTab = value}>
-        <TabsList class="grid w-full grid-cols-3">
+        <TabsList class="grid w-full grid-cols-2">
           <TabsTrigger value="notes">Notes</TabsTrigger>
           <TabsTrigger value="opportunities">Opportunities</TabsTrigger>
-          <TabsTrigger value="research">Research</TabsTrigger>
         </TabsList>
 
         <TabsContent value="notes">
-      <Card>
-        <CardHeader>
-          <div class="flex justify-between items-center">
-            <div>
-              <CardTitle>Notes</CardTitle>
-              <CardDescription>All notes related to {company.name}</CardDescription>
-            </div>
-            <Button onclick={() => showAddNote = true}>
-              <Plus class="w-4 h-4 mr-2" />
-              Add Note
-            </Button>
-          </div>
-          <div class="flex gap-2 mt-4 flex-wrap">
-            <Button 
-              variant={activeTag === null ? "secondary" : "outline"}
-              onclick={() => activeTag = null}
-              size="sm"
-            >
-              All
-            </Button>
-            {#each getAllTags() as tag}
-              <Button 
-                variant={activeTag === tag ? "secondary" : "outline"}
-                onclick={() => activeTag = tag}
-                size="sm"
-              >
-                {tag}
-              </Button>
-            {/each}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div class="space-y-6">
-            {#each getSortedNotes() as note}
-              <div class="border-l-2 border-primary pl-4 py-2">
-                <div class="flex justify-between items-start mb-2">
-                  <div>
-                    <div class="flex items-center gap-2">
-                      <h4 class="font-medium">{note.title}</h4>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        class="h-8 w-8 text-muted-foreground hover:text-destructive"
-                            onclick={() => showDeleteNote = { id: note.id, title: note.title }}
-                      >
-                        <Trash2 class="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <div class="flex gap-2 mt-1">
-                      <Badge variant="secondary">{note.type}</Badge>
-                      {#each note.tags as tag}
-                        <Badge variant="outline">{tag}</Badge>
-                      {/each}
-                    </div>
-                  </div>
-                  <span class="text-sm text-muted-foreground">{formatDate(note.created_at)}</span>
+          <Card>
+            <CardHeader>
+              <div class="flex justify-between items-center">
+                <div>
+                  <CardTitle>Notes</CardTitle>
+                  <CardDescription>All notes related to {company.name}</CardDescription>
                 </div>
-                <p class="text-muted-foreground whitespace-pre-line">{note.content}</p>
-                {#if note.type === 'meeting' && note.metadata.attendees}
-                  <div class="mt-2 text-sm text-muted-foreground">
-                    <strong>Attendees:</strong> {note.metadata.attendees.join(', ')}
+                <Button onclick={() => showAddNote = true}>
+                  <Plus class="w-4 h-4 mr-2" />
+                  Add Note
+                </Button>
+              </div>
+              <div class="flex gap-2 mt-4 flex-wrap">
+                <Button 
+                  variant={activeTag === null ? "secondary" : "outline"}
+                  onclick={() => activeTag = null}
+                  size="sm"
+                >
+                  All
+                </Button>
+                {#each getAllTags() as tag}
+                  <Button 
+                    variant={activeTag === tag ? "secondary" : "outline"}
+                    onclick={() => activeTag = tag}
+                    size="sm"
+                  >
+                    {tag}
+                  </Button>
+                {/each}
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div class="space-y-6">
+                {#each getSortedNotes() as note}
+                  <div class="border-l-2 border-primary pl-4 py-2">
+                    <div class="flex justify-between items-start mb-2">
+                      <div>
+                        <div class="flex items-center gap-2">
+                          <h4 class="font-medium">{note.title}</h4>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            class="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            onclick={() => showDeleteNote = { id: note.id, title: note.title }}
+                          >
+                            <Trash2 class="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div class="flex gap-2 mt-1">
+                          <Badge variant="secondary">{note.type}</Badge>
+                          {#each note.tags as tag}
+                            <Badge variant="outline">{tag}</Badge>
+                          {/each}
+                        </div>
+                      </div>
+                      <span class="text-sm text-muted-foreground">{formatDate(note.created_at)}</span>
+                    </div>
+                    <p class="text-muted-foreground whitespace-pre-line">{note.content}</p>
+                    {#if note.type === 'meeting' && note.metadata.attendees}
+                      <div class="mt-2 text-sm text-muted-foreground">
+                        <strong>Attendees:</strong> {note.metadata.attendees.join(', ')}
+                      </div>
+                    {/if}
                   </div>
-                {/if}
+                {:else}
+                  <div class="text-center py-8">
+                    <MessageSquare class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                    <p class="text-muted-foreground">No notes yet. Click "Add Note" to create one.</p>
+                  </div>
+                {/each}
               </div>
-            {:else}
-              <div class="text-center py-8">
-                <MessageSquare class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                <p class="text-muted-foreground">No notes yet. Click "Add Note" to create one.</p>
-              </div>
-            {/each}
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="opportunities">
@@ -865,200 +1132,385 @@
             </CardContent>
           </Card>
         </TabsContent>
+      </Tabs>
+    </div>
+  </div>
 
-        <TabsContent value="research">
-          <div class="grid gap-6">
-            <!-- AI Research Section -->
-            <Card>
-              <CardHeader>
-                <CardTitle>AI Research</CardTitle>
-                <CardDescription>AI-powered research and insights about {company.name}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {#if company.research_result && company.research_result.length > 0}
-                  <div class="space-y-4">
-                    {#each company.research_result as research}
-                      <div class="p-4 bg-muted rounded-lg">
-                        <div class="flex justify-between items-start mb-2">
-                          <h3 class="font-medium">Research Report</h3>
-                          <span class="text-sm text-muted-foreground">
-                            {formatDate(research.research_date)}
-                          </span>
-                        </div>
-                        <div class="prose prose-sm max-w-none">
-                          {@html marked(research.research_content.split('\n\nCitations:')[0])}
-                        </div>
-                        {#if research.citations?.length}
-                          <div class="mt-4 pt-4 border-t">
-                            <h4 class="text-sm font-medium mb-2">Citations</h4>
-                            <ol class="list-decimal list-inside space-y-1">
-                              {#each research.citations as citation}
-                                <li class="text-sm text-muted-foreground">
-                                  {@html citation.replace(/(https?:\/\/[^\s)]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-primary hover:text-primary/80">$1</a>')}
-                                </li>
-                              {/each}
-                            </ol>
-                          </div>
-                        {/if}
-                      </div>
-                    {/each}
-                  </div>
-                {:else}
-                  <div class="text-center py-8">
-                    <Search class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                    <p class="text-muted-foreground">No research available. Click "Generate Research" to start.</p>
-                  </div>
-                {/if}
-                <Button
-                  onclick={handleAIResearch}
-                  variant="outline"
-                  disabled={researchLoading}
-                  class="w-full mt-4"
-                >
+  <!-- Research and Related Sections -->
+  <div class="mt-8">
+    <Card>
+      <CardHeader>
+        <CardTitle>Research & Intelligence</CardTitle>
+        <CardDescription>
+          Research, insights, and intelligence about {company.name}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Tabs value={researchActiveTab} onValueChange={(value) => researchActiveTab = value}>
+          <TabsList>
+            <TabsTrigger value="research">Research</TabsTrigger>
+            <TabsTrigger value="prospects">Prospects</TabsTrigger>
+            <TabsTrigger value="annual-reports">Annual Reports</TabsTrigger>
+            <TabsTrigger value="cold-calling">Cold Calling Guide</TabsTrigger>
+            <TabsTrigger value="email-drafts">Email Drafts</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="research">
+            <div class="space-y-4">
+              <div class="flex justify-end">
+                <Button onclick={handleAIResearch} disabled={researchLoading}>
                   {#if researchLoading}
                     <div class="animate-spin rounded-full h-4 w-4 border-2 border-muted border-t-foreground mr-2"></div>
                   {/if}
-                  {researchLoading ? 'Researching...' : 'Generate Research'}
+                  {researchLoading ? 'Researching...' : 'Do AI Research'}
                 </Button>
-              </CardContent>
-            </Card>
+              </div>
 
-            <!-- Annual Reports Section -->
-            <Card>
-              <CardHeader>
-                <div class="flex justify-between items-center">
-                  <div>
-                    <CardTitle>Annual Reports</CardTitle>
-                    <CardDescription>Track and analyze annual reports</CardDescription>
-                  </div>
-                  <Button onclick={() => showAnnualReportModal = true}>
-                    <Plus class="w-4 h-4 mr-2" />
-                    Add Report
-                  </Button>
+              {#if company.research_result && company.research_result.length > 0}
+                <div class="space-y-4">
+                  {#each company.research_result as research, index}
+                    <div class="p-4 bg-muted rounded-lg hover:bg-muted/80 cursor-pointer transition-colors">
+                      <div class="flex justify-between items-start mb-2">
+                        <h3 class="font-medium">Research #{index + 1}</h3>
+                        <span class="text-sm text-muted-foreground">
+                          {research.research_date ? formatDate(research.research_date) : 'Date not available'}
+                        </span>
+                      </div>
+                      <div class="prose prose-sm max-w-none">
+                        {@html marked(research.research_content.slice(0, 200) + '...')}
+                      </div>
+                      <div class="flex justify-end gap-2 mt-4">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onclick={() => handleResearchView({ detail: { research, index } })}
+                        >
+                          View Full Research
+                        </Button>
+                        <Button 
+                          variant="destructive" 
+                          size="sm"
+                          onclick={() => handleResearchDelete({ detail: { index } })}
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  {/each}
                 </div>
-              </CardHeader>
-              <CardContent>
-                {#if company.annual_report && company.annual_report.length > 0}
-                  <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {#each company.annual_report as report}
-                      <Card>
-                        <CardContent class="pt-6">
-                          <h3 class="font-semibold">Year {report.year}</h3>
-                          <a 
-                            href={report.url} 
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="text-primary hover:text-primary/80"
+              {:else}
+                <div class="text-center py-8">
+                  <Search class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                  <p class="text-muted-foreground">No research data available</p>
+                </div>
+              {/if}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="prospects">
+            <div class="space-y-4">
+              <div class="flex justify-end">
+                <Button onclick={() => showProspectModal = true}>
+                  <Plus class="w-4 h-4 mr-2" />
+                  Add Prospect
+                </Button>
+              </div>
+
+              {#if company.prospects && company.prospects.length > 0}
+                <div class="border rounded-lg overflow-hidden">
+                  <table class="w-full">
+                    <thead>
+                      <tr class="bg-muted">
+                        <th class="px-4 py-3 text-left">Name</th>
+                        <th class="px-4 py-3 text-left">Title</th>
+                        <th class="px-4 py-3 text-left">Email</th>
+                        <th class="px-4 py-3 text-left">Phone</th>
+                        <th class="px-4 py-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {#each company.prospects as prospect}
+                        <tr class="border-t hover:bg-muted/50">
+                          <td class="px-4 py-3">{prospect.name}</td>
+                          <td class="px-4 py-3 text-muted-foreground">{prospect.title}</td>
+                          <td class="px-4 py-3">
+                            {#if prospect.email}
+                              <a href="mailto:{prospect.email}" class="text-primary hover:text-primary/80">
+                                {prospect.email}
+                              </a>
+                            {:else}
+                              <span class="text-muted-foreground">N/A</span>
+                            {/if}
+                          </td>
+                          <td class="px-4 py-3">
+                            {#if prospect.phone}
+                              <a href="tel:{prospect.phone}" class="text-primary hover:text-primary/80">
+                                {prospect.phone}
+                              </a>
+                            {:else}
+                              <span class="text-muted-foreground">N/A</span>
+                            {/if}
+                          </td>
+                          <td class="px-4 py-3 text-right">
+                            <div class="flex justify-end gap-2">
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onclick={() => handleProspectEdit(prospect)}
+                              >
+                                Edit
+                              </Button>
+                              <Button 
+                                variant="destructive" 
+                                size="sm"
+                                onclick={() => handleProspectDelete(prospect)}
+                              >
+                                Delete
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      {/each}
+                    </tbody>
+                  </table>
+                </div>
+              {:else}
+                <div class="text-center py-8">
+                  <Users class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                  <p class="text-muted-foreground">No prospects added yet</p>
+                </div>
+              {/if}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="annual-reports">
+            <div class="space-y-4">
+              <div class="flex justify-end">
+                <Button onclick={() => showAnnualReportModal = true}>
+                  <Plus class="w-4 h-4 mr-2" />
+                  Add Annual Report
+                </Button>
+              </div>
+
+              {#if company.annual_report && company.annual_report.length > 0}
+                <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {#each company.annual_report as report}
+                    <Card>
+                      <CardContent class="pt-6">
+                        <h3 class="font-semibold">Year {report.year}</h3>
+                        <a 
+                          href={report.url} 
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="text-primary hover:text-primary/80"
+                        >
+                          View Report
+                        </a>
+                        <div class="flex gap-2 mt-4">
+                          <Button 
+                            variant="destructive" 
+                            size="sm"
+                            onclick={() => handleAnnualReportDelete(report)}
                           >
-                            View Report
-                          </a>
-                          <div class="flex gap-2 mt-4">
-                            <Button 
-                              variant="destructive" 
-                              size="sm"
-                              onclick={() => handleAnnualReportDelete(report)}
-                            >
-                              Delete
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    {/each}
-                  </div>
-                {:else}
-                  <div class="text-center py-8">
-                    <FileText class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                    <p class="text-muted-foreground">No annual reports added yet.</p>
-                  </div>
-                {/if}
-              </CardContent>
-            </Card>
+                            Delete
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  {/each}
+                </div>
+              {:else}
+                <div class="text-center py-8">
+                  <FileText class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                  <p class="text-muted-foreground">No annual reports added yet</p>
+                </div>
+              {/if}
+            </div>
+          </TabsContent>
 
-            <!-- Prospects Section -->
+          <TabsContent value="cold-calling">
             <Card>
               <CardHeader>
-                <div class="flex justify-between items-center">
-                  <div>
-                    <CardTitle>Prospects</CardTitle>
-                    <CardDescription>Manage key contacts at {company.name}</CardDescription>
-                  </div>
-                  <Button onclick={() => { selectedProspect = null; showProspectModal = true; }}>
-                    <Plus class="w-4 h-4 mr-2" />
-                    Add Prospect
-                  </Button>
-                </div>
+                <CardTitle>Cold Calling Guides</CardTitle>
               </CardHeader>
               <CardContent>
                 {#if company.prospects && company.prospects.length > 0}
-                  <div class="border rounded-lg overflow-hidden">
-                    <table class="w-full">
-                      <thead>
-                        <tr class="bg-muted">
-                          <th class="px-4 py-3 text-left">Name</th>
-                          <th class="px-4 py-3 text-left">Title</th>
-                          <th class="px-4 py-3 text-left">Email</th>
-                          <th class="px-4 py-3 text-left">Phone</th>
-                          <th class="px-4 py-3 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {#each company.prospects as prospect}
-                          <tr class="border-t hover:bg-muted/50">
-                            <td class="px-4 py-3">{prospect.name}</td>
-                            <td class="px-4 py-3 text-muted-foreground">{prospect.title}</td>
-                            <td class="px-4 py-3">
-                              {#if prospect.email}
-                                <a href="mailto:{prospect.email}" class="text-primary hover:text-primary/80">
-                                  {prospect.email}
-                                </a>
-                              {:else}
-                                <span class="text-muted-foreground">N/A</span>
-                              {/if}
-                            </td>
-                            <td class="px-4 py-3">
-                              {#if prospect.phone}
-                                <a href="tel:{prospect.phone}" class="text-primary hover:text-primary/80">
-                                  {prospect.phone}
-                                </a>
-                              {:else}
-                                <span class="text-muted-foreground">N/A</span>
-                              {/if}
-                            </td>
-                            <td class="px-4 py-3 text-right">
-                              <div class="flex justify-end gap-2">
-                                <Button 
-                                  variant="outline" 
-                                  size="sm"
-                                  onclick={() => handleProspectEdit(prospect)}
-                                >
-                                  Edit
-                                </Button>
-                                <Button 
-                                  variant="destructive" 
-                                  size="sm"
-                                  onclick={() => handleProspectDelete(prospect)}
-                                >
-                                  Delete
-                                </Button>
-                              </div>
-                            </td>
+                  <div class="space-y-4">
+                    <!-- Search input -->
+                    <div class="relative">
+                      <input
+                        type="text"
+                        bind:value={coldCallingSearchQuery}
+                        placeholder="Search prospects..."
+                        class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+
+                    <!-- Prospects Table -->
+                    <div class="border rounded-lg overflow-hidden">
+                      <table class="w-full">
+                        <thead>
+                          <tr class="bg-muted">
+                            <th class="px-4 py-3 text-left">Name</th>
+                            <th class="px-4 py-3 text-left">Title</th>
+                            <th class="px-4 py-3 text-center">Guides</th>
+                            <th class="px-4 py-3 text-right">Actions</th>
                           </tr>
-                        {/each}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {#each company.prospects.filter(p => 
+                            p.name.toLowerCase().includes(coldCallingSearchQuery.toLowerCase()) ||
+                            p.title.toLowerCase().includes(coldCallingSearchQuery.toLowerCase())
+                          ) as prospect}
+                            <tr class="border-t hover:bg-muted/50">
+                              <td class="px-4 py-3">{prospect.name}</td>
+                              <td class="px-4 py-3 text-muted-foreground">{prospect.title}</td>
+                              <td class="px-4 py-3 text-center">
+                                <span class="inline-flex items-center justify-center px-2 py-1 text-xs font-medium rounded-full bg-primary/10 text-primary">
+                                  {getProspectGuidesCount(prospect.id)}
+                                </span>
+                              </td>
+                              <td class="px-4 py-3 text-right">
+                                <div class="flex justify-end gap-2">
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    onclick={() => {
+                                      selectedProspectForGuides = prospect;
+                                      showColdCallingModal = true;
+                                    }}
+                                  >
+                                    View Guides
+                                  </Button>
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    onclick={() => {
+                                      selectedProspect = prospect;
+                                      handleGenerateColdCallingGuide();
+                                    }}
+                                    disabled={loading}
+                                  >
+                                    {loading ? 'Generating...' : 'New Guide'}
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          {/each}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 {:else}
                   <div class="text-center py-8">
-                    <Users class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                    <p class="text-muted-foreground">No prospects added yet.</p>
+                    <Phone class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                    <p class="text-muted-foreground">Add prospects first to generate cold calling guides</p>
+                    <Button 
+                      variant="outline" 
+                      class="mt-4"
+                      onclick={() => {
+                        researchActiveTab = 'prospects';
+                      }}
+                    >
+                      Add Prospects
+                    </Button>
                   </div>
                 {/if}
               </CardContent>
             </Card>
-          </div>
-        </TabsContent>
-      </Tabs>
-    </div>
+          </TabsContent>
+
+          <TabsContent value="email-drafts">
+            <Card>
+              <CardHeader>
+                <CardTitle>Email Drafts</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {#if company.prospects && company.prospects.length > 0}
+                  <div class="space-y-4">
+                    <!-- Search input -->
+                    <div class="relative">
+                      <input
+                        type="text"
+                        bind:value={emailDraftsSearchQuery}
+                        placeholder="Search prospects..."
+                        class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+
+                    <!-- Prospects Table -->
+                    <div class="border rounded-lg overflow-hidden">
+                      <table class="w-full">
+                        <thead>
+                          <tr class="bg-muted">
+                            <th class="px-4 py-3 text-left">Name</th>
+                            <th class="px-4 py-3 text-left">Title</th>
+                            <th class="px-4 py-3 text-center">Email Drafts</th>
+                            <th class="px-4 py-3 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {#each company.prospects.filter(p => 
+                            p.name.toLowerCase().includes(emailDraftsSearchQuery.toLowerCase()) ||
+                            p.title.toLowerCase().includes(emailDraftsSearchQuery.toLowerCase())
+                          ) as prospect}
+                            <tr class="border-t hover:bg-muted/50">
+                              <td class="px-4 py-3">{prospect.name}</td>
+                              <td class="px-4 py-3 text-muted-foreground">{prospect.title}</td>
+                              <td class="px-4 py-3 text-center">
+                                <span class="inline-flex items-center justify-center px-2 py-1 text-xs font-medium rounded-full bg-primary/10 text-primary">
+                                  {getProspectDraftsCount(prospect.id)}
+                                </span>
+                              </td>
+                              <td class="px-4 py-3 text-right">
+                                <div class="flex justify-end gap-2">
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    onclick={() => {
+                                      selectedProspectForDrafts = prospect;
+                                      showEmailDraftsModal = true;
+                                    }}
+                                  >
+                                    View Drafts
+                                  </Button>
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    onclick={() => handleGenerateEmailDraft(prospect)}
+                                    disabled={loading}
+                                  >
+                                    {loading ? 'Generating...' : 'New Draft'}
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          {/each}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                {:else}
+                  <div class="text-center py-8">
+                    <Mail class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                    <p class="text-muted-foreground">Add prospects first to generate email drafts</p>
+                    <Button 
+                      variant="outline" 
+                      class="mt-4"
+                      onclick={() => {
+                        researchActiveTab = 'prospects';
+                      }}
+                    >
+                      Add Prospects
+                    </Button>
+                  </div>
+                {/if}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+    </Card>
   </div>
 
   <!-- Dialogs -->
@@ -1329,7 +1781,7 @@
           <div class="p-4 bg-muted rounded-lg">
             <div class="text-center">
               <Search class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <p class="text-sm text-muted-foreground">No research data available</p>
+              <p class="text-muted-foreground">No research data available</p>
             </div>
           </div>
         {/if}
@@ -1455,18 +1907,7 @@
           <div class="p-4 bg-muted rounded-lg">
             <div class="text-center">
               <Users class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <p class="text-sm text-muted-foreground">No prospects added yet.</p>
-              <Button 
-                variant="outline" 
-                class="mt-4"
-                onclick={() => {
-                  showProspectList = false;
-                  selectedProspect = null;
-                  showProspectModal = true;
-                }}
-              >
-                Add Prospect
-              </Button>
+              <p class="text-sm text-muted-foreground">No prospects added yet</p>
             </div>
           </div>
         {/if}
@@ -1474,7 +1915,7 @@
     </DialogContent>
   </Dialog>
 
-  <Dialog open={showEmailDrafts} onOpenChange={(open) => !open && (showEmailDrafts = false)}>
+  <Dialog open={showEmailDrafts} onOpenChange={(open) => !open && closeEmailDraftsModal()}>
     <DialogContent class="max-w-4xl max-h-[80vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>Email Drafts</DialogTitle>
@@ -1510,20 +1951,9 @@
             </div>
           {/each}
         {:else}
-          <div class="p-4 bg-muted rounded-lg">
-            <div class="text-center">
-              <Mail class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <p class="text-sm text-muted-foreground">No email drafts generated yet.</p>
-              {#if company.prospects && company.prospects.length > 0}
-                <p class="text-sm text-muted-foreground mt-2">
-                  Select a prospect from the Prospects tab to generate an email draft.
-                </p>
-              {:else}
-                <p class="text-sm text-muted-foreground mt-2">
-                  Add prospects first to generate email drafts.
-                </p>
-              {/if}
-            </div>
+          <div class="text-center py-8">
+            <Mail class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+            <p class="text-muted-foreground">No email drafts generated yet</p>
           </div>
         {/if}
       </div>
@@ -1566,20 +1996,9 @@
             </div>
           {/each}
         {:else}
-          <div class="p-4 bg-muted rounded-lg">
-            <div class="text-center">
-              <Phone class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <p class="text-sm text-muted-foreground">No cold calling guides generated yet.</p>
-              {#if company.prospects && company.prospects.length > 0}
-                <p class="text-sm text-muted-foreground mt-2">
-                  Select a prospect from the Prospects tab to generate a cold calling guide.
-                </p>
-              {:else}
-                <p class="text-sm text-muted-foreground mt-2">
-                  Add prospects first to generate cold calling guides.
-                </p>
-              {/if}
-            </div>
+          <div class="text-center py-8">
+            <Phone class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+            <p class="text-muted-foreground">No cold calling guides generated yet</p>
           </div>
         {/if}
       </div>
@@ -1714,4 +2133,101 @@
       </form>
     </DialogContent>
   </Dialog>
+
+  <!-- Research Modal -->
+  <ResearchModal
+    {show}
+    {loading}
+    {error}
+    research={company.research_result?.[selectedResearchIndex || 0]}
+    {editedContent}
+    close={() => showResearchModal = false}
+    save={handleResearchSave}
+  />
+
+  <!-- Add this near the other modals at the bottom of the file -->
+
+  <!-- Cold Calling Guides Modal -->
+  {#if showColdCallingModal && selectedProspectForGuides}
+    <Dialog open={showColdCallingModal} onOpenChange={(open) => !open && closeColdCallingModal()}>
+      <DialogContent class="max-w-4xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Cold Calling Guides - {selectedProspectForGuides.name}</DialogTitle>
+          <DialogDescription>
+            {selectedProspectForGuides.title}
+          </DialogDescription>
+        </DialogHeader>
+        <div class="space-y-4">
+          {#if company.cold_calling_guides?.filter(g => g.prospect.id === selectedProspectForGuides.id).length > 0}
+            {#each company.cold_calling_guides.filter(g => g.prospect.id === selectedProspectForGuides.id) as guide}
+              <div class="border rounded-lg p-4">
+                <div class="flex justify-between items-start mb-2">
+                  <span class="text-sm text-muted-foreground">
+                    Generated: {formatDate(guide.generated_at)}
+                  </span>
+                  <Button 
+                    variant="destructive" 
+                    size="sm"
+                    onclick={() => handleGuideDelete(guide.id)}
+                  >
+                    Delete
+                  </Button>
+                </div>
+                <div class="prose prose-sm max-w-none mt-4">
+                  {@html marked(guide.content)}
+                </div>
+              </div>
+            {/each}
+          {:else}
+            <div class="text-center py-8">
+              <Phone class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+              <p class="text-muted-foreground">No cold calling guides generated for this prospect yet</p>
+            </div>
+          {/if}
+        </div>
+      </DialogContent>
+    </Dialog>
+  {/if}
+
+  <!-- Email Drafts Modal -->
+  {#if showEmailDraftsModal && selectedProspectForDrafts}
+    <Dialog open={showEmailDraftsModal} onOpenChange={(open) => !open && closeEmailDraftsModal()}>
+      <DialogContent class="max-w-4xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Email Drafts - {selectedProspectForDrafts.name}</DialogTitle>
+          <DialogDescription>
+            {selectedProspectForDrafts.title}
+          </DialogDescription>
+        </DialogHeader>
+        <div class="space-y-4">
+          {#if company.cold_email_drafts?.filter(d => d.prospect.id === selectedProspectForDrafts.id).length > 0}
+            {#each company.cold_email_drafts.filter(d => d.prospect.id === selectedProspectForDrafts.id) as draft}
+              <div class="border rounded-lg p-4">
+                <div class="flex justify-between items-start mb-2">
+                  <span class="text-sm text-muted-foreground">
+                    Generated: {formatDate(draft.generated_at)}
+                  </span>
+                  <Button 
+                    variant="destructive" 
+                    size="sm"
+                    onclick={() => handleEmailDraftDelete(draft.id)}
+                  >
+                    Delete
+                  </Button>
+                </div>
+                <div class="prose prose-sm max-w-none mt-4">
+                  {@html marked(draft.content)}
+                </div>
+              </div>
+            {/each}
+          {:else}
+            <div class="text-center py-8">
+              <Mail class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+              <p class="text-muted-foreground">No email drafts generated for this prospect yet</p>
+            </div>
+          {/if}
+        </div>
+      </DialogContent>
+    </Dialog>
+  {/if}
 </div> 
