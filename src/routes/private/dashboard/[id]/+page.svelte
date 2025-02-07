@@ -2,7 +2,7 @@
   import { Tabs, TabsContent, TabsList, TabsTrigger } from "$lib/components/ui/tabs";
   import { Card, CardHeader, CardContent, CardTitle, CardDescription } from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
-  import { Plus, Calendar, FileText, MessageSquare, Building2, Globe, MapPin, Users, Clock, Link, Trash2, Search, Table, Mail, Phone } from "lucide-svelte";
+  import { Plus, Calendar, FileText, MessageSquare, Building2, Globe, MapPin, Users, Clock, Link, Trash2, Search, Table, Mail, Phone, Pencil } from "lucide-svelte";
   import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "$lib/components/ui/dialog";
   import { Label } from "$lib/components/ui/label";
   import { Input } from "$lib/components/ui/input";
@@ -216,6 +216,9 @@
 
   // Add this with the other state variables
   let searchQuery = $state('');
+
+  // Add this new state variable with the other state variables
+  let selectedOpportunity = $state<Opportunity | null>(null);
 
   // Helper functions - place these after the state declarations and before the handlers
   function formatDate(date: string) {
@@ -811,46 +814,76 @@ Notes: ${prospect.notes}`,
   // Opportunity Management Functions
   async function handleAddOpportunity(event: SubmitEvent) {
     event.preventDefault();
-    const form = event.target as HTMLFormElement;
+    
+    try {
+      const opportunityData = {
+        id: selectedOpportunity?.id, // Include ID if editing
+        name: opportunityName,
+        target_customer_id: company.id,
+        description: opportunityDescription,
+        close_date: opportunityCloseDate || null,
+        stage: opportunityStage,
+        type: opportunityType,
+        probability: opportunityProbability,
+        currency: opportunityCurrency,
+        amount: opportunityAmount,
+        next_step: opportunityNextStep || null,
+        created_at: selectedOpportunity?.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
 
-    const newOpportunity = {
-      name: opportunityName,
-      target_customer_id: company.id,
-      description: opportunityDescription,
-      close_date: opportunityCloseDate || null,
-      stage: opportunityStage,
-      type: opportunityType,
-      probability: opportunityProbability,
-      currency: opportunityCurrency,
-      amount: opportunityAmount,
-      next_step: opportunityNextStep || null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
+      let savedOpportunity;
 
-    const response = await fetch(`/api/companies/${company.id}/opportunities`, {
-      method: 'POST',
-      body: JSON.stringify(newOpportunity),
-      headers: {
-        'Content-Type': 'application/json'
+      if (selectedOpportunity) {
+        // Update existing opportunity
+        const { data: updatedData, error: updateError } = await data.supabase
+          .from('opportunities')
+          .update(opportunityData)
+          .eq('id', selectedOpportunity.id)
+          .select()
+          .single();
+
+        if (updateError) throw updateError;
+        savedOpportunity = updatedData;
+      } else {
+        // Create new opportunity
+        const { data: insertedData, error: insertError } = await data.supabase
+          .from('opportunities')
+          .insert(opportunityData)
+          .select()
+          .single();
+
+        if (insertError) throw insertError;
+        savedOpportunity = insertedData;
       }
-    });
 
-    if (response.ok) {
-      const savedOpportunity = await response.json();
-      opportunities = [savedOpportunity, ...opportunities];
-      showAddOpportunity = false;
-      // Reset form
-      opportunityName = "";
-      opportunityDescription = "";
-      opportunityCloseDate = "";
-      opportunityStage = 'Prospecting';
-      opportunityType = 'New Business';
-      opportunityProbability = 0;
-      opportunityCurrency = 'USD';
-      opportunityAmount = 0;
-      opportunityNextStep = "";
-      await invalidate('data');
+      if (savedOpportunity) {
+        if (selectedOpportunity) {
+          opportunities = opportunities.map(opp => 
+            opp.id === savedOpportunity.id ? savedOpportunity : opp
+          );
+        } else {
+          opportunities = [savedOpportunity, ...opportunities];
+        }
+
+        // Reset form and state
+        showAddOpportunity = false;
+        selectedOpportunity = null;
+        opportunityName = "";
+        opportunityDescription = "";
+        opportunityCloseDate = "";
+        opportunityStage = 'Prospecting';
+        opportunityType = 'New Business';
+        opportunityProbability = 0;
+        opportunityCurrency = 'USD';
+        opportunityAmount = 0;
+        opportunityNextStep = "";
+        
+        await invalidate('data');
+      }
+    } catch (err) {
+      console.error('Error saving opportunity:', err);
+      error = handleError(err);
     }
   }
 
@@ -885,6 +918,21 @@ Notes: ${prospect.notes}`,
   function closeEmailDraftsModal() {
     showEmailDraftsModal = false;
     selectedProspectForDrafts = null;
+  }
+
+  // Add this new function with the other opportunity management functions
+  async function handleOpportunityEdit(opportunity: Opportunity) {
+    selectedOpportunity = opportunity;
+    opportunityName = opportunity.name;
+    opportunityDescription = opportunity.description;
+    opportunityCloseDate = opportunity.close_date || '';
+    opportunityStage = opportunity.stage;
+    opportunityType = opportunity.type;
+    opportunityProbability = opportunity.probability;
+    opportunityCurrency = opportunity.currency;
+    opportunityAmount = opportunity.amount;
+    opportunityNextStep = opportunity.next_step || '';
+    showAddOpportunity = true;
   }
 </script>
 
@@ -1090,14 +1138,24 @@ Notes: ${prospect.notes}`,
                       <div>
                         <div class="flex items-center gap-2">
                           <h4 class="text-lg font-medium">{opportunity.name}</h4>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            class="h-8 w-8 text-muted-foreground hover:text-destructive"
-                            onclick={() => showDeleteOpportunity = { id: opportunity.id, name: opportunity.name }}
-                          >
-                            <Trash2 class="h-4 w-4" />
-                          </Button>
+                          <div class="flex gap-2">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              class="h-8 w-8 text-muted-foreground hover:text-primary"
+                              onclick={() => handleOpportunityEdit(opportunity)}
+                            >
+                              <Pencil class="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              class="h-8 w-8 text-muted-foreground hover:text-destructive"
+                              onclick={() => showDeleteOpportunity = { id: opportunity.id, name: opportunity.name }}
+                            >
+                              <Trash2 class="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                         <div class="flex gap-2 mt-2">
                           <Badge class={getStageColor(opportunity.stage)}>{opportunity.stage}</Badge>
@@ -1601,9 +1659,9 @@ Notes: ${prospect.notes}`,
     <DialogContent>
       <form onsubmit={handleAddOpportunity}>
         <DialogHeader>
-          <DialogTitle>Add Opportunity</DialogTitle>
+          <DialogTitle>{selectedOpportunity ? 'Edit' : 'Add'} Opportunity</DialogTitle>
           <DialogDescription>
-            Create a new sales opportunity with {company.name}
+            {selectedOpportunity ? 'Edit opportunity details' : 'Create a new sales opportunity with'} {company.name}
           </DialogDescription>
         </DialogHeader>
         <div class="grid gap-4 py-4">
