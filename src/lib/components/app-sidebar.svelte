@@ -33,11 +33,6 @@
 			icon: Building2,
 		},
 		{
-			title: "Prospecting",
-			url: "/private/targetcompanyresearch",
-			icon: Building2,
-		},
-		{
 			title: "EventSpaice",
 			url: "/private/events",
 			icon: Calendar,
