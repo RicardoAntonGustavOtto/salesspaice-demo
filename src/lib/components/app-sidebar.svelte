@@ -128,8 +128,6 @@
 		<NavMain items={data.navMain} />
 	</Sidebar.Header>
 	<Sidebar.Content>
-		<NavFavorites favorites={data.favorites} />
-		<NavWorkspaces workspaces={data.targetCompanies} />
 		<NavSecondary items={data.navSecondary} class="mt-auto" />
 	</Sidebar.Content>
 	<Sidebar.Rail />
