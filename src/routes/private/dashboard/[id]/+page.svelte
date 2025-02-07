@@ -220,6 +220,13 @@
   // Add this new state variable with the other state variables
   let selectedOpportunity = $state<Opportunity | null>(null);
 
+  // Add this with the other state variables
+  let selectedProspectForDrafts = $state<Prospect | null>(null);
+
+  // First, add a new state variable for the error dialog
+  let showErrorDialog = $state(false);
+  let errorMessage = $state('');
+
   // Helper functions - place these after the state declarations and before the handlers
   function formatDate(date: string) {
     return new Date(date).toLocaleString('en-US', {
@@ -607,9 +614,10 @@
   });
 
   // Add these functions to handle the generation
-  async function handleGenerateColdCallingGuide() {
-    if (!company?.name || !company?.website || !selectedProspect) {
-      error = "Company information or prospect is missing";
+  async function handleGenerateColdCallingGuide(prospect: Prospect) {
+    if (!company?.name || !company?.website || !prospect) {
+      errorMessage = "Company information or prospect is missing";
+      showErrorDialog = true;
       return;
     }
 
@@ -620,22 +628,24 @@
       // Get the selected research
       const latestResearch = company.research_result?.[company.research_result.length - 1];
       if (!latestResearch) {
-        throw new Error("No research results found. Please generate research first.");
+        errorMessage = "Please generate company research first before creating a cold calling guide.";
+        showErrorDialog = true;
+        return;
       }
 
       // Create the variables object with all required fields
       const promptVariables = {
-        prospect_name: selectedProspect.name,
+        prospect_name: prospect.name,
         targetcompany_name: company.name,
         targetcompany_website: company.website,
         owncompany_name: $ownCompany.name,
         owncompany_info: $ownCompany.info,
         targetcompany_research_result: latestResearch.research_content,
-        prospect_info: `Name: ${selectedProspect.name}
-Title: ${selectedProspect.title}
-Email: ${selectedProspect.email || 'N/A'}
-Phone: ${selectedProspect.phone || 'N/A'}
-Notes: ${selectedProspect.notes || 'N/A'}`
+        prospect_info: `Name: ${prospect.name}
+Title: ${prospect.title}
+Email: ${prospect.email || 'N/A'}
+Phone: ${prospect.phone || 'N/A'}
+Notes: ${prospect.notes || 'N/A'}`
       };
 
       const { prompt, model, provider } = getPrompt("prospecting_email", promptVariables);
@@ -648,7 +658,11 @@ Notes: ${selectedProspect.notes || 'N/A'}`
 
       const guide = {
         id: crypto.randomUUID(),
-        prospect: selectedProspect,
+        prospect: {
+          id: prospect.id,
+          name: prospect.name,
+          title: prospect.title
+        },
         content: guideContent,
         generated_at: new Date().toISOString(),
       };
@@ -665,10 +679,13 @@ Notes: ${selectedProspect.notes || 'N/A'}`
       if (updateError) throw updateError;
 
       company = updatedCompany;
-      showColdCallingModal = true;
-      selectedProspectForGuides = selectedProspect;
+      // Only show the modal if we're already viewing guides for this prospect
+      if (selectedProspectForGuides?.id === prospect.id) {
+        selectedProspectForGuides = prospect; // Refresh the selected prospect
+      }
     } catch (err) {
-      error = handleError(err);
+      errorMessage = "Failed to generate cold calling guide. Please try again.";
+      showErrorDialog = true;
       console.error("Cold calling guide generation failed:", err);
     } finally {
       loading = false;
@@ -910,16 +927,6 @@ Notes: ${prospect.notes}`,
   let coldCallingSearchQuery = $state('');
   let emailDraftsSearchQuery = $state('');
 
-  function closeColdCallingModal() {
-    showColdCallingModal = false;
-    selectedProspectForGuides = null;
-  }
-
-  function closeEmailDraftsModal() {
-    showEmailDraftsModal = false;
-    selectedProspectForDrafts = null;
-  }
-
   // Add this new function with the other opportunity management functions
   async function handleOpportunityEdit(opportunity: Opportunity) {
     selectedOpportunity = opportunity;
@@ -933,6 +940,24 @@ Notes: ${prospect.notes}`,
     opportunityAmount = opportunity.amount;
     opportunityNextStep = opportunity.next_step || '';
     showAddOpportunity = true;
+  }
+
+  // Add these type definitions at the top of the script section
+  interface ResearchResult {
+    research_date: string;
+    research_content: string;
+    citations?: string[];
+  }
+
+  interface ColdCallingGuide {
+    id: string;
+    prospect: {
+      id: string;
+      name: string;
+      title: string;
+    };
+    content: string;
+    generated_at: string;
   }
 </script>
 
@@ -1021,7 +1046,9 @@ Notes: ${prospect.notes}`,
               <Button 
                 variant="ghost" 
                 class="flex items-center justify-start gap-2 h-auto py-2 px-2 hover:bg-muted"
-                onclick={() => showCallGuides = true}
+                onclick={() => {
+                  showColdCallingModal = true;
+                }}
               >
                 <Phone class="w-4 h-4 text-muted-foreground" />
                 <span class="text-sm">Call Guides</span>
@@ -1073,13 +1100,13 @@ Notes: ${prospect.notes}`,
               </div>
             </CardHeader>
             <CardContent>
-              <div class="space-y-6">
+              <div class="space-y-4">
                 {#each getSortedNotes() as note}
-                  <div class="border-l-2 border-primary pl-4 py-2">
+                  <div class="border rounded-lg p-4">
                     <div class="flex justify-between items-start mb-2">
                       <div>
                         <div class="flex items-center gap-2">
-                          <h4 class="font-medium">{note.title}</h4>
+                          <h4 class="text-lg font-medium">{note.title}</h4>
                           <Button 
                             variant="ghost" 
                             size="icon" 
@@ -1089,7 +1116,7 @@ Notes: ${prospect.notes}`,
                             <Trash2 class="h-4 w-4" />
                           </Button>
                         </div>
-                        <div class="flex gap-2 mt-1">
+                        <div class="flex gap-2 mt-2">
                           <Badge variant="secondary">{note.type}</Badge>
                           {#each note.tags as tag}
                             <Badge variant="outline">{tag}</Badge>
@@ -1098,9 +1125,9 @@ Notes: ${prospect.notes}`,
                       </div>
                       <span class="text-sm text-muted-foreground">{formatDate(note.created_at)}</span>
                     </div>
-                    <p class="text-muted-foreground whitespace-pre-line">{note.content}</p>
+                    <p class="text-muted-foreground whitespace-pre-line mt-4">{note.content}</p>
                     {#if note.type === 'meeting' && note.metadata.attendees}
-                      <div class="mt-2 text-sm text-muted-foreground">
+                      <div class="mt-4 text-sm">
                         <strong>Attendees:</strong> {note.metadata.attendees.join(', ')}
                       </div>
                     {/if}
@@ -1227,28 +1254,38 @@ Notes: ${prospect.notes}`,
               {#if company.research_result && company.research_result.length > 0}
                 <div class="space-y-4">
                   {#each company.research_result as research, index}
-                    <div class="p-4 bg-muted rounded-lg hover:bg-muted/80 cursor-pointer transition-colors">
+                    <div class="border rounded-lg p-4">
                       <div class="flex justify-between items-start mb-2">
-                        <h3 class="font-medium">Research #{index + 1}</h3>
+                        <h3 class="text-lg font-medium">Research #{index + 1}</h3>
                         <span class="text-sm text-muted-foreground">
                           {research.research_date ? formatDate(research.research_date) : 'Date not available'}
                         </span>
                       </div>
-                      <div class="prose prose-sm max-w-none">
+                      <div class="prose prose-sm max-w-none mt-4">
                         {@html marked(research.research_content.slice(0, 200) + '...')}
                       </div>
                       <div class="flex justify-end gap-2 mt-4">
                         <Button 
                           variant="outline" 
                           size="sm"
-                          onclick={() => handleResearchView({ detail: { research, index } })}
+                          onclick={() => {
+                            const event = new CustomEvent('researchView', {
+                              detail: { research, index }
+                            });
+                            handleResearchView(event);
+                          }}
                         >
                           View Full Research
                         </Button>
                         <Button 
                           variant="destructive" 
                           size="sm"
-                          onclick={() => handleResearchDelete({ detail: { index } })}
+                          onclick={() => {
+                            const event = new CustomEvent('researchDelete', {
+                              detail: { index }
+                            });
+                            handleResearchDelete(event);
+                          }}
                         >
                           Delete
                         </Button>
@@ -1443,13 +1480,10 @@ Notes: ${prospect.notes}`,
                                   <Button 
                                     variant="outline" 
                                     size="sm"
-                                    onclick={() => {
-                                      selectedProspect = prospect;
-                                      handleGenerateColdCallingGuide();
-                                    }}
+                                    onclick={() => handleGenerateColdCallingGuide(prospect)}
                                     disabled={loading}
                                   >
-                                    {loading ? 'Generating...' : 'New Guide'}
+                                    {loading ? 'Generating...' : 'Generate New Guide'}
                                   </Button>
                                 </div>
                               </td>
@@ -2018,51 +2052,6 @@ Notes: ${prospect.notes}`,
     </DialogContent>
   </Dialog>
 
-  <Dialog open={showCallGuides} onOpenChange={(open) => !open && (showCallGuides = false)}>
-    <DialogContent class="max-w-4xl max-h-[80vh] overflow-y-auto">
-      <DialogHeader>
-        <DialogTitle>Call Guides</DialogTitle>
-        <DialogDescription>
-          Cold calling scripts and guides for {company.name}
-        </DialogDescription>
-      </DialogHeader>
-      <div class="space-y-4">
-        {#if company.cold_calling_guides && company.cold_calling_guides.length > 0}
-          {#each company.cold_calling_guides as guide}
-            <div class="border rounded-lg p-4">
-              <div class="flex justify-between items-start mb-4">
-                <div>
-                  <h4 class="font-medium">For: {guide.prospect.name}</h4>
-                  <p class="text-sm text-muted-foreground">{guide.prospect.title}</p>
-                </div>
-                <div class="text-sm text-muted-foreground">
-                  Generated: {formatDate(guide.generated_at)}
-                </div>
-              </div>
-              <div class="prose prose-sm max-w-none">
-                {@html marked(guide.content)}
-              </div>
-              <div class="flex justify-end mt-4">
-                <Button 
-                  variant="destructive" 
-                  size="sm"
-                  onclick={() => handleGuideDelete(guide.id)}
-                >
-                  Delete Guide
-                </Button>
-              </div>
-            </div>
-          {/each}
-        {:else}
-          <div class="text-center py-8">
-            <Phone class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <p class="text-muted-foreground">No cold calling guides generated yet</p>
-          </div>
-        {/if}
-      </div>
-    </DialogContent>
-  </Dialog>
-
   <!-- Prospect Modal -->
   <Dialog bind:open={showProspectModal}>
     <DialogContent>
@@ -2203,11 +2192,17 @@ Notes: ${prospect.notes}`,
     save={handleResearchSave}
   />
 
-  <!-- Add this near the other modals at the bottom of the file -->
-
   <!-- Cold Calling Guides Modal -->
   {#if showColdCallingModal && selectedProspectForGuides}
-    <Dialog open={showColdCallingModal} onOpenChange={(open) => !open && closeColdCallingModal()}>
+    <Dialog 
+      bind:open={showColdCallingModal}
+      onOpenChange={(open) => {
+        if (!open) {
+          showColdCallingModal = false;
+          selectedProspectForGuides = null;
+        }
+      }}
+    >
       <DialogContent class="max-w-4xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Cold Calling Guides - {selectedProspectForGuides.name}</DialogTitle>
@@ -2216,8 +2211,8 @@ Notes: ${prospect.notes}`,
           </DialogDescription>
         </DialogHeader>
         <div class="space-y-4">
-          {#if company.cold_calling_guides?.filter(g => g.prospect.id === selectedProspectForGuides.id).length > 0}
-            {#each company.cold_calling_guides.filter(g => g.prospect.id === selectedProspectForGuides.id) as guide}
+          {#if company.cold_calling_guides?.filter(g => g.prospect.id === selectedProspectForGuides?.id).length > 0}
+            {#each company.cold_calling_guides.filter(g => g.prospect.id === selectedProspectForGuides?.id) as guide}
               <div class="border rounded-lg p-4">
                 <div class="flex justify-between items-start mb-2">
                   <span class="text-sm text-muted-foreground">
@@ -2258,8 +2253,8 @@ Notes: ${prospect.notes}`,
           </DialogDescription>
         </DialogHeader>
         <div class="space-y-4">
-          {#if company.cold_email_drafts?.filter(d => d.prospect.id === selectedProspectForDrafts.id).length > 0}
-            {#each company.cold_email_drafts.filter(d => d.prospect.id === selectedProspectForDrafts.id) as draft}
+          {#if company.cold_email_drafts?.filter(d => d.prospect.id === selectedProspectForDrafts?.id).length > 0}
+            {#each company.cold_email_drafts.filter(d => d.prospect.id === selectedProspectForDrafts?.id) as draft}
               <div class="border rounded-lg p-4">
                 <div class="flex justify-between items-start mb-2">
                   <span class="text-sm text-muted-foreground">
@@ -2288,4 +2283,36 @@ Notes: ${prospect.notes}`,
       </DialogContent>
     </Dialog>
   {/if}
+
+  <!-- Error Dialog -->
+  <Dialog bind:open={showErrorDialog}>
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>Action Required</DialogTitle>
+        <DialogDescription>
+          {errorMessage}
+        </DialogDescription>
+      </DialogHeader>
+      <DialogFooter>
+        {#if errorMessage.includes('research first')}
+          <Button 
+            onclick={() => {
+              showErrorDialog = false;
+              researchActiveTab = 'research';
+            }}
+          >
+            Go to Research
+          </Button>
+        {:else}
+          <Button 
+            onclick={() => {
+              showErrorDialog = false;
+            }}
+          >
+            OK
+          </Button>
+        {/if}
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </div> 
